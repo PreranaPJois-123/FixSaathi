@@ -35,6 +35,8 @@ What each evidence level means:
 | Microwave oven and water purifier support | Done | Tested (data, detection, retrieval, microwave server rule). Not verified live. |
 | Error-code aliases (`CH38 / F4`), spaced codes (`CH 38`) | Done | Tested |
 | Required tools and escalation reason in diagnosis | Done | Tested with fake Gemini. Not verified live. |
+| Conversation-aware chat (real turns, follow-ups, earlier photo kept) | Done | Tested with fake Gemini. **Not verified live** from this environment. |
+| Markdown answers with numbered sources | Done | Tested (parser unit tests, browser screenshots) |
 | Fine-tuned or custom-trained model | **Not built** | FixSaathi uses Gemini through its API with retrieval. We do not claim a trained model. |
 | Embedding re-ranking | Code exists, not used in deployment | No index built; deployment uses `VECTOR_SEARCH_MODE=keyword` |
 | **Gemini Live** streaming voice and camera | Built, not usable with the current key | Tested with a fake Live session. The key lists no Live model. |

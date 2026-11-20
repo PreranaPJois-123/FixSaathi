@@ -80,18 +80,45 @@ Evidence levels:
 - **Microwave rule in server code:** any generated step that opens the cabinet or touches the magnetron, high-voltage capacitor, diode or transformer becomes a hand-over to authorised service.
 - **Quality report** (`docs/DATASET_QUALITY_REPORT.md`): 0 duplicates, 0 invalid categories, 0 conflicting code meanings, 365 of 377 records with a source URL. The 12 without one are FixSaathi team guidance, attributed to the team.
 
+## 3c. Quality pass (20 Nov 2026, night)
+
+**Bugs found and fixed**
+- *Chat repeated the technician's message to Gemini* (once in the flattened history, once as input). Chat now sends real user/model turns, and the message being answered is sent once.
+- *Follow-ups lost context*: retrieval used only the first message and the latest one. It now also uses the last two technician turns, and the most recent photo stays available for questions like "is that a burn mark?".
+- *Search missed word forms*: the full-text index used no stemming, so "burn" did not match "burning" and "humming" did not match "hum". It now uses English stemming (migration `0005`).
+- *Safety re-check missed word forms*: the server's power-sensitive word check matched "remove" but not "removing", and "replace" but not "replaced". It now matches word forms. Over-matching only locks more steps.
+- *Wasted embedding call on every message* when `VECTOR_SEARCH_MODE=auto` and no index had been built. The call is now skipped.
+- *Stray space* left where an invented citation was removed, in chat and in speech.
+- *Voice read Markdown symbols and record ids aloud.* Voice messages now ask Gemini for short spoken replies, and the browser strips symbols before speaking.
+- *Printing a report gave white text on white paper.* Added print styles.
+- *Unclear startup crash* when `SECRET_KEY` or `DATABASE_URL` was missing. The server now says what to fix, and `scripts/setup_env.py` creates the file.
+- *Help page overstated voice* ("live voice and camera"). Corrected, and added answers on how the AI works and which appliances are covered.
+
+**Dataset**
+- Rewrote one misleading team-written step ("Try bypassing the regulator…") as an observation-only check.
+- Corrected the `requires_power_off` flag on 8 records, using the same word-form fix.
+- Reviewed the 280 ApplianceDB records: no encoding errors, no empty faults, every record sourced. The three UK/US pairs with the same code are kept, because markets differ. The prompts now say that a code match from a US or UK model must be confirmed against the Indian label.
+
+**AI behaviour**
+- A new chat prompt answers the question first, then gives ranked causes, discriminating checks and the next step. Length matches the message, it handles follow-ups and reported check results, says when the knowledge base has no record, and keeps every safety rule.
+- Replies use light Markdown, which the app renders safely (no HTML), with numbered citations linked to their sources.
+
+**Interface**
+- New design system (tokens, cards, buttons, inputs, chips) and redesigned sidebar, sign-in, home (live knowledge count and AI status), chat, workspace, history (search, mobile cards), reports, dashboard, help, demo, voice and the camera dialog.
+
 ## 4. Test results (run 20 Nov 2026)
 
 | Suite | Result |
 |---|---|
-| Backend pytest (real PostgreSQL, fake Gemini) | **132 passed, 0 failed** (28 new: dataset quality, appliance detection, retrieval per appliance, code aliases, microwave rule, new diagnosis fields) |
-| Frontend unit tests (Vitest) | **5 passed** |
+| Backend pytest (real PostgreSQL, fake Gemini) | **140 passed, 0 failed**. Covers chat turns and follow-ups, stemming, citation clean-up, the embedding skip, dataset quality, appliance detection, retrieval per appliance, code aliases, the microwave rule and the diagnosis fields. |
+| Frontend unit tests (Vitest) | **10 passed** (Markdown parser, speech text, upload checks, API client) |
 | TypeScript type check and production build | Pass |
 | Lint (oxlint) | 0 errors, 3 warnings (re-render performance hints) |
 | Browser end-to-end, real Chrome against the production-style single service (re-run after the knowledge update) | **29 of 29 checks pass**: login and errors, register, refresh survives reload, chat, sidebar, camera capture, component box, diagnosis, image evidence, lock, server 409 refusal, one statement keeps the lock, both unlock, step completion, step picture, report contents, safety disclaimer, history, saved diagnoses, roles, manager dashboard, voice on a closed session, mobile without horizontal scroll |
 | Browser test for a provider failure | Pass: the specific "API key invalid" error and its fix hint are shown |
 | Browser demo-mode test, **no AI key**, `STORAGE_PROVIDER=database`, server restarted mid-test | **16 of 16 pass**: health, AI-unavailable notice, demo link, labels, photo, banner, lock (409), photo after restart, unlock, demo report label, 401 without a token, no page errors |
 | Console or page errors during the full screenshot journey | 0 |
+| Fresh setup from the source ZIP (new venv, `npm ci`, `setup_env.py`, migrations, ingest, one-process run, browser smoke test) | **8 of 8 pass** |
 
 **Not covered by automated tests:**
 - Real Gemini answers. The tests use a fake, so you need a manual check after the key is set.
