@@ -66,20 +66,77 @@ Environment variables on the Render service:
 
 `/health` returns 200 only when the database answers, and 503 (`"status": "unhealthy"`) when it doesn't. It accepts GET and HEAD and is never cached. A missing AI key is reported (`ai.configured: false`) but doesn't make the app unhealthy, because demo mode still works.
 
-## Run locally (macOS)
+## Run locally
+
+You need **PostgreSQL 16**, **Python 3.12** and **Node 22** (or just Docker). A Gemini key is optional: without it, AI features answer `AI_NOT_CONFIGURED` and the labelled demo scenarios still work.
+
+### Option A: Docker (one command)
 
 ```bash
-brew install postgresql@16 python@3.12 node && brew services start postgresql@16 && createdb fixsaathi
-cd backend && python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-cp .env.example .env      # set SECRET_KEY and DATABASE_URL=postgresql+psycopg://$USER@localhost:5432/fixsaathi; add GEMINI_API_KEY yourself
-python scripts/check_gemini.py --call          # checks the key and models; never prints the key
+python3 backend/scripts/setup_env.py --compose   # writes .env with a new SECRET_KEY
+# open .env and paste your key after GEMINI_API_KEY= (optional)
+docker compose up --build                       # site: http://localhost:5173   API: http://localhost:8000/docs
+```
+
+### Option B: manual (macOS / Linux)
+
+```bash
+# 1. Database (macOS: brew install postgresql@16 && brew services start postgresql@16)
+createdb fixsaathi
+
+# 2. Backend
+cd backend
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/setup_env.py --database-url "postgresql+psycopg://$USER@localhost:5432/fixsaathi"
+#    then paste your Gemini key into backend/.env (optional)
+python scripts/check_gemini.py --call             # optional: checks the key and models; never prints the key
 alembic upgrade head && python scripts/ingest_knowledge.py
-uvicorn app.main:app --reload --port 8000      # API docs at http://localhost:8000/docs
+uvicorn app.main:app --reload --port 8000         # API docs: http://localhost:8000/docs
+
+# 3. Frontend (new terminal)
+cd frontend && cp .env.example .env && npm ci && npm run dev    # http://localhost:5173
+```
+
+### Option B on Windows (PowerShell)
+
+```powershell
+# Install PostgreSQL 16 from postgresql.org, then create the database "fixsaathi" (pgAdmin, or: createdb -U postgres fixsaathi)
+cd backend
+py -3.12 -m venv .venv; .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python scripts\setup_env.py --database-url "postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/fixsaathi"
+alembic upgrade head; python scripts\ingest_knowledge.py
+uvicorn app.main:app --reload --port 8000
 # new terminal
-cd frontend && cp .env.example .env && npm ci && npm run dev   # http://localhost:5173
+cd frontend; copy .env.example .env; npm ci; npm run dev
+```
+
+### Option C: one process, like production
+
+```bash
+cd frontend && npm ci && VITE_API_BASE_URL="" npm run build && cd ../backend
+FRONTEND_DIST=../frontend/dist uvicorn app.main:app --port 8000   # site and API both on http://localhost:8000
 ```
 
 To make yourself a manager (for the dashboard): `python scripts/create_user.py --email you@example.com --role manager --org "Your Company"`
+
+### Tests
+
+```bash
+cd backend && DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/fixsaathi_test pytest -q   # uses (and wipes) a separate test database
+cd frontend && npm test && npm run build
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `FixSaathi cannot start: check SECRET_KEY ...` | Run `python scripts/setup_env.py` in `backend/`. |
+| `connection refused` / `password authentication failed` | PostgreSQL isn't running, or `DATABASE_URL` in `backend/.env` has the wrong user or password. |
+| Chat says *AI is not available* | No `GEMINI_API_KEY` in `backend/.env`. Paste it, restart the backend. |
+| *Free-tier quota reached* | Wait about a minute; the fallback models are tried automatically. |
+| Voice button does nothing | Use Chrome or Edge and allow the microphone. Voice uses browser speech plus Gemini. |
 
 ## AI behaviour, and what happens without AI
 

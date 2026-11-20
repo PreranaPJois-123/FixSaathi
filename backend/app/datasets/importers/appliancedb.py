@@ -5,7 +5,6 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from .. import normalize as N
-from ..schema import RepairRecord
 
 SOURCE = 'ApplianceDB (free developer sample)'
 LICENSE = 'ODbL-1.0 (attribution + share-alike); docs CC BY 4.0. https://github.com/ApplianceDB/ApplianceDB-public'

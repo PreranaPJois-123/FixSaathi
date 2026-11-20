@@ -5,7 +5,7 @@ Every model tool call is executed by this server. `give_step` goes through Safet
 """
 import asyncio, base64, binascii, contextlib, json, logging, re, time
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable
+from typing import Any, Callable
 from google.genai import types
 from sqlalchemy import func, select
 from ..agents import prompts
@@ -20,7 +20,7 @@ from . import ai, safety
 from .sessions import add_message, transition
 
 logger = logging.getLogger('live')
-POWER_WORDS = re.compile(r'\b(open|opening|remove|unscrew|cover|canopy|panel|wire|wiring|terminal|capacitor|discharge|replace|solder|connector|board|pcb|khol|taar)\b', re.I)
+POWER_WORDS = re.compile(r'\b(open(s|ed|ing)?|remov(e|es|ed|ing|al)|unscrew\w*|disconnect\w*|detach\w*|dismantl\w*|cover(s)?|canopy|panel(s)?|wire(s|d)?|wiring|terminal(s)?|capacitor(s)?|discharg\w*|replac(e|es|ed|ing|ement)|solder\w*|connector(s)?|board(s)?|pcb(s)?|khol\w*|taar)\b', re.I)
 
 TOOLS = [types.Tool(function_declarations=[
     types.FunctionDeclaration(name='get_diagnosis', description='Rank likely faults once the appliance and symptom are known.',

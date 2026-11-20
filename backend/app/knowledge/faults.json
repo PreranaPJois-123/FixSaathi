@@ -47,7 +47,7 @@
    ],
    "troubleshooting_steps": [
     "Check whether other loads on the same circuit work",
-    "Try bypassing the regulator position test at the switchboard (observation only)",
+    "Set the regulator to full speed and check whether the fan hums or responds at all (observation only)",
     "With power isolated and verified, inspect canopy terminals for looseness"
    ],
    "safety_requirements": [

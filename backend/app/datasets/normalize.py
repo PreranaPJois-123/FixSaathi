@@ -109,7 +109,7 @@ def steps(text: str | None) -> list[str]:
     return parts or [s]
 
 
-POWER_WORDS = re.compile(r'\b(open|remove|unscrew|disconnect|replace|cover|panel|wire|wiring|terminal|capacitor|board|pcb|element|motor|pump|valve|thermistor|compressor)\b', re.I)
+POWER_WORDS = re.compile(r'\b(open(s|ed|ing)?|remov(e|es|ed|ing|al)|unscrew\w*|disconnect\w*|replac(e|es|ed|ing|ement)|cover(s)?|panel(s)?|wire(s|d)?|wiring|terminal(s)?|capacitor(s)?|board(s)?|pcb(s)?|element(s)?|motor(s)?|pump(s)?|valve(s)?|thermistor(s)?|compressor(s)?)\b', re.I)
 CATEGORY_SAFETY = {
     'washing_machine': ['Unplug the machine or switch off at the MCB and verify with your own tester before removing any panel.', 'Drain residual water before tilting or opening.'],
     'refrigerator': ['Unplug before removing covers. Sealed-system or gas work needs a certified technician.'],

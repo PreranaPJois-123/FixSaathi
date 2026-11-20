@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { chatService, repairService } from '../services'
+import { speakable } from '../utils/text'
 import type { Diagnosis, VoiceState } from '../types'
 import type { LiveLine, LiveStep, LivePart } from './useLiveVoice'
 
@@ -58,11 +59,11 @@ export function useBrowserVoice() {
       if (!text || !sidRef.current) return
       add('user', text); turns.current++; setState('processing'); setError(null)
       try {
-        const res = await chatService.send(sidRef.current, text, [])
+        const res = await chatService.send(sidRef.current, text, [], 'voice')
         const reply = res.assistant_message?.message || ''
         if (!reply) { setError([res.ai_error?.message || 'The AI could not reply.', res.ai_error?.code === 'QUOTA_EXCEEDED' ? 'Say it again in a few seconds.' : ''].join(' ').trim()); setState('listening'); listenRef.current(); return }
         add('assistant', reply); setState('responding'); maybeAnalyse()
-        const u = new SpeechSynthesisUtterance(reply); u.lang = langRef.current
+        const u = new SpeechSynthesisUtterance(speakable(reply)); u.lang = langRef.current
         u.onend = () => { if (active.current) { setState('listening'); listenRef.current() } }
         u.onerror = u.onend
         window.speechSynthesis.cancel(); window.speechSynthesis.speak(u)

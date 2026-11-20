@@ -36,7 +36,7 @@ export const demoService = {
 
 export const chatService = {
   history: (sid: string) => api<Page<ServerMessage>>(`/api/v1/sessions/${sid}/messages?limit=200`),
-  send: (sid: string, text: string, media_ids: string[]) => api<ChatResult>(`/api/v1/sessions/${sid}/messages`, { body: { text, media_ids }, timeoutMs: 90000 }),
+  send: (sid: string, text: string, media_ids: string[], channel: 'text' | 'voice' = 'text') => api<ChatResult>(`/api/v1/sessions/${sid}/messages`, { body: { text, media_ids, channel }, timeoutMs: 90000 }),
 }
 
 export const cameraService = {
@@ -88,4 +88,11 @@ export const dashboardService = {
     ])
     return { overview, trend, technicians, ratings: metrics.ratings }
   },
+}
+
+export interface KnowledgeStats { total: number; by_category: Record<string, number>; by_verification_status: Record<string, number> }
+export interface AiStatus { configured: boolean; models: Record<string, string | null> }
+export const systemService = {
+  knowledge: () => api<KnowledgeStats>('/api/v1/knowledge/stats'),
+  ai: () => api<AiStatus>('/api/v1/ai/status'),
 }

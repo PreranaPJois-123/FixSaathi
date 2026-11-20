@@ -6,7 +6,7 @@ Every hit carries its record_id, source, licence and verification status so answ
 """
 import logging, re
 from dataclasses import dataclass, field
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..core.exceptions import AppError
@@ -22,6 +22,10 @@ WORD = re.compile(r'[a-z0-9]{2,}')
 STOP = {'the', 'and', 'is', 'it', 'my', 'not', 'of', 'to', 'in', 'on', 'with', 'hai', 'nahi', 'ka', 'ki', 'raha', 'rahi', 'but', 'its', 'this', 'that', 'was', 'are', 'code', 'error', 'err', 'showing', 'shows',
         'display', 'machine', 'washing', 'washer', 'fridge', 'refrigerator', 'ac', 'split', 'appliance', 'unit', 'please', 'help', 'kya', 'karu', 'problem', 'issue', 'microwave', 'purifier', 'oven'}
 VERIFICATION_WEIGHT = {'technician_reviewed': 1.25, 'verified_source': 1.15, 'unverified': 1.0, 'synthetic_demo': 0.5}
+
+
+class _NoIndex(Exception):
+    pass
 
 
 @dataclass
@@ -126,8 +130,8 @@ async def retrieve(db: Session, query: str, category: str | None = None, brand: 
     code_missing = [c for c in code_missing if not any(c.endswith(f) or f.endswith(c) for f in code_found)]  # 'ERIF' alias of found 'IF'
     tsq = _tsquery(query)
     if tsq:
-        rank = func.ts_rank(func.to_tsvector('simple', RepairRecordRow.search_text), func.to_tsquery('simple', tsq))
-        rows = db.execute(base().add_columns(rank).where(func.to_tsvector('simple', RepairRecordRow.search_text).op('@@')(func.to_tsquery('simple', tsq)))
+        rank = func.ts_rank(func.to_tsvector('english', RepairRecordRow.search_text), func.to_tsquery('english', tsq))
+        rows = db.execute(base().add_columns(rank).where(func.to_tsvector('english', RepairRecordRow.search_text).op('@@')(func.to_tsquery('english', tsq)))
                           .order_by(rank.desc()).limit(40)).all()
         for row, r in rows:
             add(row, float(r) * 10, 'keyword')
@@ -135,7 +139,11 @@ async def retrieve(db: Session, query: str, category: str | None = None, brand: 
     mode, reason = 'keyword', None
     st = get_settings()
     if use_embeddings and st.vector_search_mode != 'keyword' and get_gemini().configured and st.gemini_embed_model and hits is not None:
+        mdl_cfg = get_gemini().model('embed')
+        indexed = db.scalar(select(func.count()).select_from(RepairEmbedding).where(RepairEmbedding.source_type == 'record', RepairEmbedding.model_identifier == mdl_cfg)) if mdl_cfg else 0
         try:
+            if not indexed:  # no index built: don't spend an embedding call (and free-tier quota) on every message
+                raise _NoIndex()
             (qv,), mdl = await get_gemini().embed([query], task='RETRIEVAL_QUERY')
             ids = select(RepairRecordRow.id).where(RepairRecordRow.id.in_(base().with_only_columns(RepairRecordRow.id).scalar_subquery()))
             embs = db.execute(select(RepairEmbedding, RepairRecordRow).join(RepairRecordRow, RepairRecordRow.id == RepairEmbedding.source_id)
@@ -149,6 +157,8 @@ async def retrieve(db: Session, query: str, category: str | None = None, brand: 
                         add(row, sim * 3, 'embedding' if row.record_id not in hits else hits[row.record_id].match)
             else:
                 reason = 'No record embeddings for the configured model. Run scripts/index_knowledge.py.'
+        except _NoIndex:
+            reason = 'No record embeddings for the configured model. Run scripts/index_knowledge.py.'
         except AppError as e:
             reason = f'Embedding call failed ({e.code}); keyword results only.'
     else:

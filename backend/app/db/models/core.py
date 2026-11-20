@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, CheckConstraint, UniqueConstraint, Uuid, Float
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, CheckConstraint, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..base import Base, CreatedMixin, IdMixin, JSONType, utcnow
 

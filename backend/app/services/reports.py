@@ -2,7 +2,6 @@ import secrets
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from ..core.exceptions import Conflict, Forbidden
-from ..db.base import utcnow
 from ..db.models import (DiagnosisResult, EscalationRequest, Feedback, IdentifiedComponent, RepairSession, RepairStep, SafetyEvent, ServiceReport, User)
 from .safety import DISCLAIMER, current_state
 from .sessions import APPLIANCE_LABELS, transition

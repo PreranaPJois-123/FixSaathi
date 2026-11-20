@@ -7,14 +7,14 @@ export function SafetyPanel({ state, busy, canEdit, onChange }: Props) {
   const power = state?.power_off_confirmed ?? false
   const tester = state?.tester_checked ?? false
   const both = !!state?.unlocked
-  const box = 'mt-0.5 h-5 w-5 shrink-0 accent-[#2fc4b0]'
+  const box = 'mt-0.5 h-5 w-5 shrink-0 accent-[#2dd4bf]'
   return (
-    <section aria-labelledby="safety-h" className={`rounded-3xl border p-5 ${both ? 'border-ok/30 bg-ok/5' : 'border-crit/30 bg-crit/5'}`}>
-      <h2 id="safety-h" className="flex items-center gap-2 font-semibold"><ShieldAlert size={18} className={both ? 'text-ok' : 'text-crit'} />Safety before opening anything{busy && <Loader2 size={14} className="animate-spin text-ink-3" />}</h2>
+    <section aria-labelledby="safety-h" className={`relative overflow-hidden rounded-[1.25rem] border p-5 md:p-6 ${both ? 'border-ok/35 bg-gradient-to-b from-ok/[0.08] to-ok/[0.02]' : 'border-crit/35 bg-gradient-to-b from-crit/[0.08] to-crit/[0.02]'}`}>
+      <h2 id="safety-h" className="flex items-center gap-2.5 text-[15px] font-semibold"><span className={`flex h-8 w-8 items-center justify-center rounded-xl ${both ? 'bg-ok/15 text-ok' : 'bg-crit/15 text-crit'}`}><ShieldAlert size={17} /></span>Safety before opening anything{busy && <Loader2 size={14} className="animate-spin text-ink-3" />}</h2>
       <p className="mt-2 text-sm text-ink-2">These are <strong className="text-ink">your own statements</strong>, recorded on the server for this session only. FixSaathi cannot measure voltage, control a tester or confirm that a circuit is dead. Always verify with your own tester.</p>
       <div className="mt-4 space-y-3">
-        <label className="flex cursor-pointer items-start gap-3 text-sm"><input type="checkbox" disabled={busy || !canEdit} className={box} checked={power} onChange={e => onChange(e.target.checked, tester)} /><span>I state that I have switched the power off at the MCB or isolator.</span></label>
-        <label className="flex cursor-pointer items-start gap-3 text-sm"><input type="checkbox" disabled={busy || !canEdit} className={box} checked={tester} onChange={e => onChange(power, e.target.checked)} /><span>I state that I checked with my own tester and found no live line.</span></label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-bg/30 p-3 text-sm transition-colors hover:border-line-2"><input type="checkbox" disabled={busy || !canEdit} className={box} checked={power} onChange={e => onChange(e.target.checked, tester)} /><span>I state that I have switched the power off at the MCB or isolator.</span></label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-bg/30 p-3 text-sm transition-colors hover:border-line-2"><input type="checkbox" disabled={busy || !canEdit} className={box} checked={tester} onChange={e => onChange(power, e.target.checked)} /><span>I state that I checked with my own tester and found no live line.</span></label>
       </div>
       <p className={`mt-4 text-xs font-medium ${both ? 'text-ok' : 'text-crit'}`} role="status">
         {state?.expired ? 'Your earlier statements expired. Check again and record them again.'

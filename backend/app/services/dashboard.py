@@ -1,5 +1,5 @@
 from datetime import timedelta
-from sqlalchemy import case, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from ..db.base import utcnow
 from ..db.models import AIUsage, EscalationRequest, Feedback, RepairSession, User

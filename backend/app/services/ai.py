@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from ..agents import prompts
 from ..agents.schemas import ComponentOut, DiagnosisOutput, GuidanceOutput
-from ..core.exceptions import AIError, AppError, Conflict, NotFound
+from ..core.exceptions import AppError, Conflict, NotFound
 from ..db.models import (AIUsage, Conversation, DiagnosisResult, IdentifiedComponent, Media, RepairSession, RepairStep, User)
 from ..integrations.gemini.client import CallResult, get_gemini as _live_gemini
 from ..demo.client import DemoClient, is_demo
@@ -56,19 +56,65 @@ def _clean_citations(text: str, allowed: set[str]) -> tuple[str, list[str], list
         if rid in allowed:
             used.append(rid); return m.group(0)
         invented.append(rid); return ''
-    return CITE.sub(sub, text).replace('  ', ' ').strip(), list(dict.fromkeys(used)), invented
+    out = CITE.sub(sub, text)
+    out = re.sub(r'[ \t]+([.,;:!?)])', r'\1', out)  # no stray space where a removed citation was
+    out = re.sub(r'[ \t]{2,}', ' ', out)
+    return out.strip(), list(dict.fromkeys(used)), invented
 
 
-async def _retrieve(db: Session, s: RepairSession, text: str) -> dict:
-    return await kb.retrieve(db, f'{s.issue_description} {text}'.strip(), category=s.appliance_type)
+def _turns(db: Session, s: RepairSession, exclude_id=None, limit: int = 20) -> list[types.Content]:
+    """Earlier conversation as real user/model turns, so Gemini follows the thread (what 'it' refers to, what was already said).
+    The message being answered is excluded: it is sent once, in the final turn, with its evidence."""
+    q = select(Conversation).where(Conversation.session_id == s.id, Conversation.role.in_(('user', 'assistant')))
+    if exclude_id is not None:
+        q = q.where(Conversation.id != exclude_id)
+    rows = list(db.scalars(q.order_by(Conversation.created_at.desc()).limit(limit)))[::-1]
+    out: list[types.Content] = []
+    for r in rows:
+        txt = (r.message or '').strip()
+        if r.role == 'user' and (r.meta or {}).get('media_ids'):
+            txt = f'{txt} [shared a photo]'.strip()
+        if not txt:
+            continue
+        role = 'user' if r.role == 'user' else 'model'
+        part = types.Part(text=txt[:3000])
+        if out and out[-1].role == role:
+            out[-1].parts.append(part)  # e.g. two technician messages in a row after a failed AI reply
+        else:
+            out.append(types.Content(role=role, parts=[part]))
+    while out and out[0].role != 'user':
+        out.pop(0)
+    return out
 
 
-async def chat_reply(db: Session, s: RepairSession, user: User, text: str, media_ids: list) -> Conversation:
+def _recent_user_text(db: Session, s: RepairSession, exclude_id=None, n: int = 2) -> str:
+    q = select(Conversation.message).where(Conversation.session_id == s.id, Conversation.role == 'user')
+    if exclude_id is not None:
+        q = q.where(Conversation.id != exclude_id)
+    return ' '.join(m for m in db.scalars(q.order_by(Conversation.created_at.desc()).limit(n)) if m)
+
+
+async def _retrieve(db: Session, s: RepairSession, text: str, exclude_id=None) -> dict:
+    # Follow-ups ("what about the capacitor?") keep the original problem and the last turns in the search.
+    q = ' '.join(dict.fromkeys(p for p in (s.issue_description, _recent_user_text(db, s, exclude_id), text) if p))
+    return await kb.retrieve(db, q.strip(), category=s.appliance_type)
+
+
+async def chat_reply(db: Session, s: RepairSession, user: User, text: str, media_ids: list, exclude_id=None, channel: str = 'text') -> Conversation:
     g = _ai(db, s)
-    res = await _retrieve(db, s, text)
-    contents: list = [prompts.wrap('knowledge', kb.context_block(res)), prompts.wrap('history', _history(db, s)), f'Appliance (from session): {s.appliance_type}',
-                      prompts.wrap('technician_input', text or '(technician shared a photo)')]
-    contents += _images(db, s, media_ids) if media_ids else []
+    res = await _retrieve(db, s, text, exclude_id)
+    final: list = [types.Part(text=prompts.wrap('knowledge', kb.context_block(res))),
+                   types.Part(text=f'Appliance (from session): {s.appliance_type}'),
+                   types.Part(text=prompts.wrap('technician_input', text or '(technician shared a photo)'))]
+    if media_ids:
+        final += _images(db, s, media_ids)
+    else:
+        earlier = _images(db, s, None, limit=1)  # follow-up questions about a photo sent earlier in this session
+        if earlier:
+            final += [types.Part(text='Most recent photo from earlier in this session, for reference:'), *earlier]
+    if channel == 'voice':
+        final.append(types.Part(text=prompts.VOICE_CHANNEL_NOTE))
+    contents = [*_turns(db, s, exclude_id), types.Content(role='user', parts=final)]
     try:
         reply, meta = await g.generate_text('chat', contents, prompts.CHAT_SYSTEM.format(language=user.preferred_language))
     except AppError as e:

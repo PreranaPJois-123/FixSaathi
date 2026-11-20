@@ -1,4 +1,3 @@
-import uuid
 from datetime import date
 from sqlalchemy import Boolean, Date, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -24,7 +23,7 @@ class RepairRecordRow(IdMixin, CreatedMixin, Base):
     search_text: Mapped[str] = mapped_column(Text)
     data: Mapped[dict] = mapped_column(JSONType)
     last_updated: Mapped[date] = mapped_column(Date)
-    __table_args__ = (Index('ix_repair_records_fts', text("to_tsvector('simple', search_text)"), postgresql_using='gin'),)
+    __table_args__ = (Index('ix_repair_records_fts', text("to_tsvector('english', search_text)"), postgresql_using='gin'),)
 
 
 class DatasetMedia(IdMixin, CreatedMixin, Base):

@@ -39,7 +39,7 @@ async def start(body: DemoIn, u: User = Depends(current_user), db: Session = Dep
         data = (HERE / sc['photo']).read_bytes(); mime, ext, w, h = inspect_image(data)
         m = Media(session_id=s.id, uploaded_by=u.id, kind='upload', storage_key=get_storage().put(data, ext, f'sessions/{s.id}'), mime_type=mime,
                   size_bytes=len(data), width=w, height=h, meta={'demo': True}); db.add(m); db.flush(); media_ids.append(m.id)
-    add_message(db, s, 'user', sc['issue'], 'text', {'media_ids': [str(i) for i in media_ids], 'demo': True})
-    await ai.chat_reply(db, s, u, sc['issue'], media_ids)
+    um = add_message(db, s, 'user', sc['issue'], 'text', {'media_ids': [str(i) for i in media_ids], 'demo': True})
+    await ai.chat_reply(db, s, u, sc['issue'], media_ids, exclude_id=um.id)
     db.commit()
     return session_out(db, s)

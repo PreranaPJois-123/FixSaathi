@@ -10,6 +10,7 @@ import { useBrowserVoice } from '../hooks/useBrowserVoice'
 import { useAuth } from '../context/AuthContext'
 import { useApp } from '../context/AppContext'
 import { sessionService } from '../services'
+import { speakable } from '../utils/text'
 import type { VoiceState } from '../types'
 
 const copy: Record<VoiceState, string> = {
@@ -58,8 +59,8 @@ export default function VoicePage() {
   return (
     <div className="relative flex min-h-full flex-col items-center px-6 py-6" style={{ background: 'radial-gradient(55% 48% at 50% 30%, rgba(47,196,176,.16), rgba(56,182,232,.06) 55%, transparent 78%)' }}>
       <div className="flex w-full max-w-4xl items-center justify-between">
-        <button onClick={() => { if (sid) { void openSession(sid); nav(`/assistant?session=${sid}`) } else nav('/assistant') }} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-2 hover:bg-surface hover:text-ink"><ArrowLeft size={16} />Return to text chat</button>
-        {sid && <Link to={`/session/${sid}`} className="text-sm text-teal hover:underline">Open repair workspace</Link>}
+        <button onClick={() => { if (sid) { void openSession(sid); nav(`/assistant?session=${sid}`) } else nav('/assistant') }} className="btn btn-ghost"><ArrowLeft size={16} />Return to text chat</button>
+        {sid && <Link to={`/session/${sid}`} className="btn btn-sm">Open repair workspace</Link>}
       </div>
 
       <div className="grid w-full max-w-4xl flex-1 items-start gap-8 py-6 lg:grid-cols-[1fr_1fr]">
@@ -89,7 +90,7 @@ export default function VoicePage() {
             <button onClick={() => void v.toggleCamera(video.current)} disabled={!running} aria-label={v.cameraOn ? 'Stop camera' : 'Show the appliance'} className="flex h-14 w-14 items-center justify-center rounded-full border border-line text-ink-2 hover:bg-surface disabled:opacity-40">{v.cameraOn ? <CameraOff /> : <Camera />}</button>
             <button onClick={() => { v.stop(); if (sid) nav(`/session/${sid}`) }} aria-label="End conversation" className="flex h-14 w-14 items-center justify-center rounded-full border border-crit/40 text-crit hover:bg-crit/10"><PhoneOff /></button>
           </div>
-          {running && <form onSubmit={submit} className="flex w-full max-w-sm gap-2"><label className="sr-only" htmlFor="lt">Type instead</label><input id="lt" value={text} onChange={e => setText(e.target.value)} placeholder="Too noisy? Type here" className="flex-1 rounded-xl border border-line bg-[#0a1d33] px-3 py-2 text-sm outline-none focus:border-teal" /><button aria-label="Send" className="rounded-xl border border-line px-3 text-ink-2 hover:bg-surface"><Send size={16} /></button></form>}
+          {running && <form onSubmit={submit} className="flex w-full max-w-sm gap-2"><label className="sr-only" htmlFor="lt">Type instead</label><input id="lt" value={text} onChange={e => setText(e.target.value)} placeholder="Too noisy? Type here" className="field flex-1 !py-2 text-sm" /><button aria-label="Send" className="btn px-3"><Send size={16} /></button></form>}
           <p className="max-w-sm text-center text-xs text-ink-3">{mode === 'browser' ? 'Browser voice mode: your browser turns speech into text, Gemini answers through the FixSaathi server, and your browser reads the answer aloud. Live camera is only available in Gemini Live mode.' : (v.state === 'listening' || v.state === 'responding') ? 'Gemini Live mode: audio streams to Gemini through the FixSaathi server. Raw audio and video are not stored; transcripts are saved to this session.' : 'Uses Gemini Live when the server\'s API key supports it; otherwise your browser\'s speech recognition, with Gemini answering through the server. Transcripts are saved to this session.'}</p>
         </div>
 
@@ -108,7 +109,7 @@ export default function VoicePage() {
           )}
           {mode === 'browser' && bv.analysing && <p className="flex items-center gap-2 text-sm text-ink-3"><Loader2 size={14} className="animate-spin text-teal" />Analysing the problem and preparing safe repair steps...</p>}
           {mode === 'browser' && bv.diag && (
-            <div className="rounded-2xl border border-line p-4 text-sm">
+            <div className="card p-4 text-sm">
               <p className="text-xs uppercase tracking-wider text-ink-3">Possible causes (AI estimate, check before acting)</p>
               <ul className="mt-2 space-y-1">{bv.diag.faults.slice(0, 4).map((f, i) => <li key={i}><span className="font-medium">{f.fault}</span> <span className="text-ink-3">{Math.round(f.confidence * 100)}%</span><br /><span className="text-ink-2">{f.explanation}</span></li>)}</ul>
               {bv.diag.recommended_checks.length > 0 && <><p className="mt-3 text-xs uppercase tracking-wider text-ink-3">Recommended checks</p><ul className="mt-1 list-disc pl-5 text-ink-2">{bv.diag.recommended_checks.slice(0, 5).map((c, i) => <li key={i}>{c}</li>)}</ul></>}
@@ -116,12 +117,12 @@ export default function VoicePage() {
               {bv.diag.requires_escalation && <p className="mt-3 font-medium text-crit">A senior technician is recommended for this job.</p>}
             </div>
           )}
-          {v.diagnosis && mode !== 'browser' && <div className="rounded-2xl border border-line p-4 text-sm"><p className="text-xs uppercase tracking-wider text-ink-3">Diagnosis (AI estimate)</p><p className="mt-1">{v.diagnosis}</p></div>}
-          {v.part && <div className="rounded-2xl border border-line p-4 text-sm"><AuthImage src={v.part.url} alt="Latest camera frame" className="h-48 w-full rounded-xl" box={v.part.box} label={v.part.component_name} /><p className="mt-2">{v.part.found ? v.part.component_name : 'Not identified'}: <span className="text-ink-2">{v.part.explanation}</span></p></div>}
-          {v.steps.length > 0 && <ol className="space-y-2">{v.steps.map(s => <li key={s.id} className="rounded-2xl border border-line bg-surface/40 p-3 text-sm"><p className="font-medium">{s.step_number}. {s.title}{s.requires_power_off && <span className="ml-2 rounded-full border border-crit/40 px-2 py-px text-[11px] text-crit">power off</span>}</p><p className="text-ink-2">{s.instruction}</p></li>)}</ol>}
-          <div className="max-h-80 space-y-2 overflow-y-auto rounded-2xl border border-line p-4" aria-live="polite" aria-label="Live transcript">
+          {v.diagnosis && mode !== 'browser' && <div className="card p-4 text-sm"><p className="text-xs uppercase tracking-wider text-ink-3">Diagnosis (AI estimate)</p><p className="mt-1">{v.diagnosis}</p></div>}
+          {v.part && <div className="card p-4 text-sm"><AuthImage src={v.part.url} alt="Latest camera frame" className="h-48 w-full rounded-xl" box={v.part.box} label={v.part.component_name} /><p className="mt-2">{v.part.found ? v.part.component_name : 'Not identified'}: <span className="text-ink-2">{v.part.explanation}</span></p></div>}
+          {v.steps.length > 0 && <ol className="space-y-2">{v.steps.map(s => <li key={s.id} className="card p-3.5 text-sm"><p className="font-medium">{s.step_number}. {s.title}{s.requires_power_off && <span className="ml-2 rounded-full border border-crit/40 px-2 py-px text-[11px] text-crit">power off</span>}</p><p className="text-ink-2">{s.instruction}</p></li>)}</ol>}
+          <div className="card max-h-80 space-y-2.5 overflow-y-auto p-4" aria-live="polite" aria-label="Live transcript">
             {v.lines.length === 0 ? <p className="text-sm text-ink-3">The live transcript will appear here.</p> :
-              v.lines.map(l => <p key={l.id} className={`text-sm ${l.role === 'user' ? 'text-ink' : 'text-teal'}`}><span className="text-ink-3">{l.role === 'user' ? 'You: ' : 'FixSaathi: '}</span>{l.text}</p>)}
+              v.lines.map(l => <p key={l.id} className={`text-sm ${l.role === 'user' ? 'text-ink' : 'text-teal'}`}><span className="text-ink-3">{l.role === 'user' ? 'You: ' : 'FixSaathi: '}</span>{l.role === 'user' ? l.text : speakable(l.text)}</p>)}
           </div>
         </div>
       </div>

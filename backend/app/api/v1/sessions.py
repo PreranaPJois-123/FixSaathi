@@ -81,7 +81,7 @@ async def post_message(session_id: uuid.UUID, body: MessageIn, u: User = Depends
         s.issue_description = body.text.strip()[:2000]
     db.commit()  # persist the technician's message even if the AI call fails
     try:
-        am = await ai.chat_reply(db, s, u, body.text.strip(), body.media_ids)
+        am = await ai.chat_reply(db, s, u, body.text.strip(), body.media_ids, exclude_id=um.id, channel=body.channel)
         return ChatResult(user_message=MessageOut.model_validate(um), assistant_message=MessageOut.model_validate(am), ai_status='ok')
     except AppError as e:
         db.commit()

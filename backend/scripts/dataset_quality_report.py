@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _paths import PROCESSED, RAW
 from app.datasets.importers import manufacturer_docs
 from app.datasets.pipeline import content_key, validate
-from app.datasets.schema import CATEGORIES, RepairRecord
+from app.datasets.schema import CATEGORIES
 
 DOCS = PROCESSED.parent.parent / 'docs' / 'DATASET_QUALITY_REPORT.md'
 CODE_OK = re.compile(r'^[A-Z0-9]{1,8}$')

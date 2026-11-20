@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -78,4 +78,12 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()  # raises a clear validation error at startup if mandatory settings are missing
+    try:
+        return Settings()
+    except ValidationError as e:
+        missing = ', '.join(sorted({str(x['loc'][0]).upper() for x in e.errors()}))
+        raise SystemExit(
+            f'FixSaathi cannot start: check {missing} in backend/.env.\n'
+            '  - First run? Create the file with:  python scripts/setup_env.py\n'
+            '  - SECRET_KEY must be at least 32 characters; DATABASE_URL looks like postgresql+psycopg://user:pass@localhost:5432/fixsaathi'
+        ) from None

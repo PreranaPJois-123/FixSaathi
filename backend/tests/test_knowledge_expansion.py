@@ -163,3 +163,30 @@ def test_diagnosis_returns_tools_and_escalation_reason(client, tech, session_id,
     fake.json['diagnosis'] = {**fake.json['diagnosis'], 'requires_escalation': False}
     d = client.post(f'/api/v1/sessions/{session_id}/diagnose', headers=tech['h']).json()
     assert d['escalation_reason'] is None
+
+
+# ---------- stemming and citation clean-up ----------
+
+def test_word_forms_match_with_english_stemming(loaded):
+    r = _retrieve('there are burn marks on the ceiling around the fan', category='ceiling_fan')
+    assert 'mfr:orient-fan-burning-smell' in [h.record_id for h in r['hits']]
+    r = _retrieve('fan hums but blades do not spin', category='ceiling_fan')
+    assert any(h.record_id in ('mfr:crompton-fan-no-start-power', 'fixsaathi:fan_slow_hum', 'mfr:orient-fan-hum') for h in r['hits'][:4])
+
+
+def test_removed_citation_leaves_no_stray_space():
+    from app.services.ai import _clean_citations
+    text, used, invented = _clean_citations('It overheats [mfr:made-up]. Check the terminal [mfr:ok-1], then the capacitor.', {'mfr:ok-1'})
+    assert text == 'It overheats. Check the terminal [mfr:ok-1], then the capacitor.' and used == ['mfr:ok-1'] and invented == ['mfr:made-up']
+
+
+def test_no_embedding_call_without_an_index(client, fake, monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setenv('GEMINI_EMBED_MODEL', 'fake-embed'); monkeypatch.setenv('GEMINI_API_KEY', 'x' * 30); monkeypatch.setenv('VECTOR_SEARCH_MODE', 'auto'); get_settings.cache_clear()
+    calls = []
+    real = fake.embed
+    async def counting(texts, task='RETRIEVAL_DOCUMENT'):
+        calls.append(task); return await real(texts, task)
+    monkeypatch.setattr(fake, 'embed', counting)
+    r = _retrieve('fan hums', category='ceiling_fan')
+    assert calls == [] and r['mode'] == 'keyword' and 'index_knowledge' in r['fallback_reason']
