@@ -1,0 +1,40 @@
+{
+ "records_valid": 292,
+ "by_source": {
+  "FixSaathi curated guidance": 12,
+  "ApplianceDB (free developer sample)": 280
+ },
+ "by_category": {
+  "ceiling_fan": 3,
+  "split_ac": 2,
+  "washing_machine": 253,
+  "refrigerator": 32,
+  "mcb_electrical": 1,
+  "rooftop_solar": 1
+ },
+ "by_verification_status": {
+  "unverified": 170,
+  "verified_source": 122
+ },
+ "records_rejected": 0,
+ "rejected_reasons": {},
+ "skipped_by_source": {
+  "fixsaathi_curated": {
+   "count": 0,
+   "reasons": {}
+  },
+  "appliancedb": {
+   "count": 158,
+   "reasons": {
+    "out_of_scope:dishwasher": 73,
+    "out_of_scope:oven_range": 45,
+    "out_of_scope:dryer": 40
+   }
+  }
+ },
+ "synthetic_demo": {
+  "valid": 4,
+  "rejected": 0,
+  "note": "Kept separate. Not ingested unless --include-synthetic."
+ }
+}
