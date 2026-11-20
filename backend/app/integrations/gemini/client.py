@@ -16,6 +16,9 @@ from .errors import classify
 logger = logging.getLogger('gemini')
 T = TypeVar('T', bound=BaseModel)
 LAST_STATUS: dict = {'ok': None}
+# Models that just answered quota / billing / not-found are skipped for a while, so every message doesn't wait on them again.
+COOLDOWN: dict[str, float] = {}
+COOL_CODES = {'QUOTA_EXCEEDED': 60.0, 'BILLING_REQUIRED': 900.0, 'MODEL_NOT_FOUND': 900.0}
 MODEL_SETTINGS = {'agent': 'gemini_agent_model', 'live': 'gemini_live_model', 'embed': 'gemini_embed_model', 'image': 'nano_banana_model'}
 
 
@@ -56,8 +59,9 @@ class GeminiClient:
                 self._client = genai.Client(api_key=s.gemini_api_key, http_options=opts)
         return self._client
 
-    async def _call(self, op: str, model: str, fn):
-        """Bounded retries with exponential backoff, only for transient categories. Never retries bad keys, permissions or unknown models."""
+    async def _call(self, op: str, model: str, fn, quota_retry: bool = True):
+        """Bounded retries with exponential backoff, only for transient categories. Never retries bad keys, permissions or unknown models.
+        With quota_retry=False a quota error is raised at once, so the caller can move to a fallback model instead of waiting."""
         s = get_settings()
         for attempt in range(s.gemini_max_retries + 1):
             t0 = time.perf_counter()
@@ -68,13 +72,18 @@ class GeminiClient:
                 meta = CallResult(model=model, latency_ms=ms, input_tokens=getattr(um, 'prompt_token_count', None), output_tokens=getattr(um, 'candidates_token_count', None))
                 log(logger, 'gemini_call', op=op, model=model, ms=ms, attempt=attempt, input_tokens=meta.input_tokens, output_tokens=meta.output_tokens)
                 LAST_STATUS.update(ok=True, op=op, model=model, code=None, at=time.time())
+                COOLDOWN.pop(model, None)
                 return resp, meta
             except Exception as e:  # noqa: BLE001 - every failure is classified below
                 c = classify(e, model)
                 log(logger, 'gemini_call_failed', logging.WARNING, op=op, model=model, attempt=attempt, error_code=c.code, provider_http=c.provider_http,
                     provider_status=c.provider_status, provider_message=c.provider_message, ms=int((time.perf_counter() - t0) * 1000))
                 LAST_STATUS.update(ok=False, op=op, model=model, code=c.code, hint=c.hint, at=time.time())
-                if c.retryable and attempt < s.gemini_max_retries:
+                if c.code in COOL_CODES:
+                    COOLDOWN[model] = time.time() + min(max(c.retry_after or 0, COOL_CODES[c.code]), 3600)
+                if c.code == 'QUOTA_EXCEEDED' and not quota_retry:
+                    pass  # fall through to raise: a fallback model is available
+                elif c.retryable and attempt < s.gemini_max_retries:
                     await asyncio.sleep(min(c.retry_after or 0.5 * 2 ** attempt, 6)); continue
                 err_cls = AIUnavailable if c.http_status == 503 else AIError
                 raise err_cls(c.message, code=c.code, status=c.http_status, details=c.details(model)) from e
@@ -107,11 +116,18 @@ class GeminiClient:
 
     async def _agent_call(self, op: str, contents: Any, **cfg_kw):
         """Try the agent model, then each configured fallback, only on rate-limit/tier errors. Each switch is logged."""
-        models = self._agent_models(); last: Exception | None = None
+        configured = self._agent_models(); last: Exception | None = None
+        now = time.time()
+        ready = [m for m in configured if COOLDOWN.get(m, 0) <= now]
+        cooling = sorted((m for m in configured if m not in ready), key=lambda m: COOLDOWN[m])
+        models = ready + cooling  # cooling models stay as a last resort
+        if cooling:
+            log(logger, 'gemini_models_cooling', op=op, skipped=cooling)
         for i, model in enumerate(models):
             try:
                 try:
-                    resp, meta = await self._call(op, model, lambda: self.raw.aio.models.generate_content(model=model, contents=contents, config=self._cfg(**cfg_kw)))
+                    resp, meta = await self._call(op, model, lambda: self.raw.aio.models.generate_content(model=model, contents=contents, config=self._cfg(**cfg_kw)),
+                                                  quota_retry=i == len(models) - 1)
                 except AIError as e:
                     if e.code == 'INVALID_REQUEST' and (get_settings().gemini_thinking_level or '').strip() and not getattr(self, '_no_thinking_cfg', False):
                         self._no_thinking_cfg = True  # this model does not accept thinking_level; stop sending it
@@ -119,8 +135,8 @@ class GeminiClient:
                         resp, meta = await self._call(op, model, lambda: self.raw.aio.models.generate_content(model=model, contents=contents, config=self._cfg(**cfg_kw)))
                     else:
                         raise
-                if i:
-                    log(logger, 'gemini_fallback_used', logging.WARNING, op=op, primary=models[0], used=model)
+                if model != configured[0]:
+                    log(logger, 'gemini_fallback_used', logging.WARNING, op=op, primary=configured[0], used=model)
                 return resp, meta
             except (AIUnavailable, AIError) as e:
                 last = e

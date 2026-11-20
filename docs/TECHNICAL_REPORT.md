@@ -88,6 +88,7 @@ Evidence levels:
 - *Search missed word forms*: the full-text index used no stemming, so "burn" did not match "burning" and "humming" did not match "hum". It now uses English stemming (migration `0005`).
 - *Safety re-check missed word forms*: the server's power-sensitive word check matched "remove" but not "removing", and "replace" but not "replaced". It now matches word forms. Over-matching only locks more steps.
 - *Wasted embedding call on every message* when `VECTOR_SEARCH_MODE=auto` and no index had been built. The call is now skipped.
+- *Slow replies on the live site (found in the production log).* The first real chat took 24 s: `gemini-3.6-flash` and `gemini-3.5-flash` returned quota errors on the free-tier key and were each retried after a wait before `gemini-3.1-flash-lite` answered (about 10 s). Exhausted models are now tried once with no retry wait, then skipped for the cooldown Google asks for (at least 60 s), so later messages go straight to a model that works.
 - *Stray space* left where an invented citation was removed, in chat and in speech.
 - *Voice read Markdown symbols and record ids aloud.* Voice messages now ask Gemini for short spoken replies, and the browser strips symbols before speaking.
 - *Printing a report gave white text on white paper.* Added print styles.
@@ -110,7 +111,7 @@ Evidence levels:
 
 | Suite | Result |
 |---|---|
-| Backend pytest (real PostgreSQL, fake Gemini) | **140 passed, 0 failed**. Covers chat turns and follow-ups, stemming, citation clean-up, the embedding skip, dataset quality, appliance detection, retrieval per appliance, code aliases, the microwave rule and the diagnosis fields. |
+| Backend pytest (real PostgreSQL, fake Gemini) | **141 passed, 0 failed**. Covers chat turns and follow-ups, stemming, citation clean-up, the embedding skip, dataset quality, appliance detection, retrieval per appliance, code aliases, the microwave rule and the diagnosis fields. |
 | Frontend unit tests (Vitest) | **10 passed** (Markdown parser, speech text, upload checks, API client) |
 | TypeScript type check and production build | Pass |
 | Lint (oxlint) | 0 errors, 3 warnings (re-render performance hints) |
@@ -121,7 +122,7 @@ Evidence levels:
 | Fresh setup from the source ZIP (new venv, `npm ci`, `setup_env.py`, migrations, ingest, one-process run, browser smoke test) | **8 of 8 pass** |
 
 **Not covered by automated tests:**
-- Real Gemini answers. The tests use a fake, so you need a manual check after the key is set.
+- Real Gemini answers. The tests use a fake. One live chat was confirmed in the production log (20 Nov, 17:12 IST, answered by `gemini-3.1-flash-lite`); the new prompt has not yet been tried live.
 - Browser voice mode. Headless Chrome has no speech recognition.
 
 ## 5. Known limitations

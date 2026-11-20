@@ -128,3 +128,36 @@ def test_agent_falls_back_to_next_model_on_rate_limit(monkeypatch):
     g._client = type('C', (), {'aio': type('A', (), {'models': Models()})()})()
     text, meta = asyncio.run(g.generate_text('chat', 'hi', 'sys'))
     assert text == 'ok' and meta.model == 'backup' and [u[0] for u in used] == ['primary', 'backup'] and used[0][1] is not None
+
+
+def test_exhausted_model_is_skipped_on_the_next_message(monkeypatch):
+    """Live log 20 Nov: two exhausted models were retried on every message (24 s). Now: no retry wait on them, then skipped."""
+    import asyncio, time as _t
+    from google.genai import errors as ge
+    from app.config import get_settings
+    from app.integrations.gemini import client as gc
+    s = get_settings()
+    monkeypatch.setattr(s, 'gemini_api_key', 'test'); monkeypatch.setattr(s, 'gemini_agent_model', 'a')
+    monkeypatch.setattr(s, 'gemini_agent_fallback_models', 'b,c'); monkeypatch.setattr(s, 'gemini_max_retries', 1)
+    monkeypatch.setattr(s, 'gemini_thinking_level', '')
+    used = []
+
+    class Resp:
+        text = 'ok'; candidates = [object()]; prompt_feedback = None; usage_metadata = None
+
+    class Models:
+        async def generate_content(self, model, contents, config):
+            used.append(model)
+            if model in ('a', 'b'):
+                raise ge.ClientError(429, {'error': {'code': 429, 'status': 'RESOURCE_EXHAUSTED', 'message': 'free_tier_requests, limit: 10'}})
+            return Resp()
+
+    g = gc.GeminiClient()
+    g._client = type('C', (), {'aio': type('A', (), {'models': Models()})()})()
+    t0 = _t.perf_counter()
+    text, meta = asyncio.run(g.generate_text('chat', 'hi', 'sys'))
+    assert meta.model == 'c' and used == ['a', 'b', 'c'] and _t.perf_counter() - t0 < 1.0  # no retry sleeps on exhausted models
+    used.clear()
+    text, meta = asyncio.run(g.generate_text('chat', 'hi again', 'sys'))
+    assert meta.model == 'c' and used == ['c']  # a and b are cooling down
+    gc.COOLDOWN.clear()
