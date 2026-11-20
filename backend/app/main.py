@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
         st = get_settings()
         return {'status': 'ok', 'env': st.app_env, 'ai': {'configured': st.ai_configured,
                 'models': {'agent': bool(st.gemini_agent_model), 'live': bool(st.gemini_live_model), 'embed': bool(st.gemini_embed_model), 'image': bool(st.nano_banana_model)}},
-                'mode': 'ai' if st.ai_configured else 'development (no AI: AI endpoints return AI_NOT_CONFIGURED)'}
+                'mode': 'ai' if st.ai_configured else 'no AI key set: AI endpoints return AI_NOT_CONFIGURED'}
 
     @app.get('/ready', tags=['health'])
     def ready():
@@ -67,7 +67,7 @@ def _mount_frontend(app: FastAPI, dist: str | None) -> None:
     root = Path(dist).resolve()
     app.mount('/assets', StaticFiles(directory=root / 'assets'), name='assets')
 
-    @app.get('/{path:path}', include_in_schema=False)
+    @app.api_route('/{path:path}', methods=['GET', 'HEAD'], include_in_schema=False)
     def spa(path: str):
         if path.startswith(('api/', 'docs', 'redoc', 'openapi.json', 'health', 'ready')):
             raise HTTPException(404)
