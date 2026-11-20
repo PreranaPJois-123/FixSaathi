@@ -53,9 +53,10 @@ def _title_from(issue: str, limit: int = 60) -> str:
     for sep in ('. ', '? ', '! '):
         if sep in t[:limit + 20]:
             t = t.split(sep, 1)[0]; break
+    t = t.rstrip('.?!')
     if len(t) > limit:
         t = t[:limit].rsplit(' ', 1)[0].rstrip(',;:') + '...'
-    return t.rstrip('.?!')
+    return t
 
 
 def create_session(db: Session, user: User, appliance_type: str | None, issue: str, title: str | None) -> RepairSession:
