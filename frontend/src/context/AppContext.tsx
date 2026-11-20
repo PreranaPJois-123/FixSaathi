@@ -11,7 +11,7 @@ interface Ctx {
   thinking: boolean
   error: string | null
   sessionsVersion: number
-  send: (text: string, attachments?: Attachment[]) => Promise<void>
+  send: (text: string, attachments?: Attachment[], appliance?: string) => Promise<void>
   openSession: (id: string) => Promise<void>
   newSession: () => void
 }
@@ -38,7 +38,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { setMessages((await chatService.history(id)).items.map(toChat)) } catch (e) { setError((e as ApiError).message) }
   }, [])
 
-  const send = useCallback(async (text: string, attachments: Attachment[] = []) => {
+  const send = useCallback(async (text: string, attachments: Attachment[] = [], appliance?: string) => {
     if (busy.current || (!text.trim() && attachments.length === 0)) return
     busy.current = true; setError(null)
     const localId = uid()
@@ -46,7 +46,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setThinking(true)
     try {
       if (!sid.current) {
-        const s = await sessionService.create(text.trim() || 'Photo shared')
+        const s = await sessionService.create(text.trim() || 'Photo shared', appliance)
         sid.current = s.id; setSessionId(s.id); setSessionsVersion(v => v + 1)
       }
       const ids: string[] = []

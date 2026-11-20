@@ -89,8 +89,8 @@ export default function RepairSessionPage() {
       <Link to="/history" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"><ChevronLeft size={16} />Repair history</Link>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-ink-3">Session {s.reference}</p>
-          <h1 className="text-2xl font-semibold md:text-3xl">{s.appliance_label}: {s.title}</h1>
+          <p className="text-xs uppercase tracking-wider text-ink-3"><span className="text-teal">{s.appliance_label}</span> · Session {s.reference}</p>
+          <h1 className="text-2xl font-semibold md:text-3xl">{s.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2"><StatusPill status={s.status} />{s.technician_name && !owner && <span className="text-xs text-ink-2">Technician: {s.technician_name}</span>}</div>
         </div>
         <div className="flex flex-wrap gap-2">

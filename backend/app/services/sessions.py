@@ -45,6 +45,19 @@ def ensure_open(s: RepairSession) -> None:
         raise Conflict('This session is closed.', code='SESSION_CLOSED')
 
 
+def _title_from(issue: str, limit: int = 60) -> str:
+    """First sentence of the issue, cut at a word boundary, so titles never end mid-word."""
+    t = ' '.join(issue.split())
+    if not t:
+        return ''
+    for sep in ('. ', '? ', '! '):
+        if sep in t[:limit + 20]:
+            t = t.split(sep, 1)[0]; break
+    if len(t) > limit:
+        t = t[:limit].rsplit(' ', 1)[0].rstrip(',;:') + '...'
+    return t.rstrip('.?!')
+
+
 def create_session(db: Session, user: User, appliance_type: str | None, issue: str, title: str | None) -> RepairSession:
     app = appliance_type or guess_appliance(issue)
     ref = None
@@ -54,7 +67,7 @@ def create_session(db: Session, user: User, appliance_type: str | None, issue: s
             ref = cand; break
     s = RepairSession(id=uuid.uuid4(), reference=ref or 'FS-' + uuid.uuid4().hex[:8].upper(), technician_id=user.id, organisation_id=user.organisation_id,
                       appliance_type=app, issue_description=issue.strip(), status='active',
-                      title=(title or (issue.strip()[:80] if issue.strip() else f'{APPLIANCE_LABELS.get(app, "Appliance")} repair')))
+                      title=(title or _title_from(issue) or f'{APPLIANCE_LABELS.get(app, "Appliance")} repair'))
     db.add(s); db.flush()
     return s
 

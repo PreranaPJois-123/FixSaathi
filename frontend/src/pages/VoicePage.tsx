@@ -18,7 +18,7 @@ const copy: Record<VoiceState, string> = {
   listening: "I'm listening...",
   processing: 'Analysing your request...',
   responding: 'FixSaathi is responding...',
-  error: 'Unable to start the session. Please try again.',
+  error: 'Voice could not start',
 }
 
 export default function VoicePage() {

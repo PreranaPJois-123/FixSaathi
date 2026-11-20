@@ -1,18 +1,22 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Camera, Mic } from 'lucide-react'
+import { AirVent, Camera, Fan, Mic, Refrigerator, Sun, WashingMachine, Zap } from 'lucide-react'
 import { Emblem } from '../components/common/Logo'
 import { Composer } from '../components/composer/Composer'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import { suggestions } from '../constants/prompts'
+import { appliances, suggestions } from '../constants/prompts'
+
+const ICON = { split_ac: AirVent, washing_machine: WashingMachine, refrigerator: Refrigerator, ceiling_fan: Fan, mcb_electrical: Zap, rooftop_solar: Sun } as const
 
 export default function WelcomePage() {
   const { send, newSession } = useApp()
   const { user } = useAuth()
   const first = user?.full_name.split(' ')[0] ?? ''
   const nav = useNavigate()
-  const go = (text: string, a: Parameters<typeof send>[1] = []) => { newSession(); void send(text, a); nav('/assistant') }
+  const [appliance, setAppliance] = useState<string | null>(null)
+  const go = (text: string, a: Parameters<typeof send>[1] = [], forced?: string) => { newSession(); void send(text, a, forced ?? appliance ?? undefined); nav('/assistant') }
   return (
     <div className="relative flex min-h-full flex-col items-center justify-center px-4 py-8 md:px-8" style={{ background: 'var(--fs-glow)' }}>
       <div className="flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-7 text-center">
@@ -25,12 +29,23 @@ export default function WelcomePage() {
           <p className="mx-auto max-w-md text-[15px] text-ink-2">Describe the problem, show me the appliance, and let's solve it together.</p>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="w-full">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }} className="w-full">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-ink-3">1. What are you repairing?</p>
+          <div role="radiogroup" aria-label="Appliance" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {appliances.map(a => { const I = ICON[a.id]; const on = appliance === a.id
+              return <button key={a.id} role="radio" aria-checked={on} onClick={() => setAppliance(on ? null : a.id)}
+                className={`flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-3 text-xs transition-colors ${on ? 'border-teal bg-teal/15 text-ink' : 'border-line bg-surface/40 text-ink-2 hover:border-teal/60 hover:text-ink'}`}>
+                <I size={20} className={on ? 'text-teal' : ''} aria-hidden />{a.label}</button> })}
+          </div>
+          <p className="mb-2 mt-5 text-xs font-medium uppercase tracking-wider text-ink-3">2. Describe the problem or show a photo</p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="-mt-5 w-full">
           <Composer onSend={go} autoFocus />
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="flex flex-wrap justify-center gap-2">
-          {suggestions.map(s => <button key={s.label} onClick={() => go(s.prompt)} className="rounded-full border border-white/30 px-4 py-2 text-sm text-ink transition-colors hover:border-teal hover:bg-teal/10">{s.label}</button>)}
+          {suggestions.map(s => <button key={s.label} onClick={() => go(s.prompt, [], s.appliance)} className="rounded-full border border-white/30 px-4 py-2 text-sm text-ink transition-colors hover:border-teal hover:bg-teal/10">{s.label}</button>)}
         </motion.div>
 
         <div className="flex gap-3 md:hidden">
@@ -38,7 +53,7 @@ export default function WelcomePage() {
         </div>
         <p className="hidden items-center gap-1.5 text-xs text-ink-3 md:flex"><Camera size={12} />Tip: use the camera button to show an appliance</p>
       </div>
-      <p className="mt-6 pb-2 text-xs text-ink-3">Powered by intelligent multimodal AI</p>
+      <p className="mt-6 pb-2 text-xs text-ink-3">Powered by Google Gemini. AI suggestions are estimates: check before acting.</p>
     </div>
   )
 }
