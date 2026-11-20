@@ -1,115 +1,89 @@
 # FixSaathi: AI Repair Copilot
 
-A voice-first, multimodal repair copilot for appliance field technicians. React + TypeScript frontend, FastAPI + PostgreSQL backend, and Google Gemini (Live, agents, image generation, embeddings) through the official `google-genai` SDK. The safety lock is enforced on the server.
+FixSaathi is a repair copilot for appliance field technicians. The technician picks the appliance, describes the fault by text or voice, and adds a photo. FixSaathi gives a ranked diagnosis grounded in repair records, then guided steps. The **server** locks every step that needs the power off until the technician records both safety statements. When the job is done, the service report is written automatically.
+
+- **Live:** https://fixsaathi.onrender.com (health check: `/health`)
+- **Stack:** React 19 + TypeScript (Vite, Tailwind 4) · FastAPI + SQLAlchemy 2 + Alembic · PostgreSQL · Google Gemini through the official `google-genai` SDK, called from the server only
 
 ```
-FixSaathi/
-  frontend/          React 19 + Vite + Tailwind 4 (design unchanged, mock services replaced by real API calls)
-  backend/           FastAPI, SQLAlchemy 2, Alembic, Gemini integrations, dataset pipeline, 94 pytest tests
-  data/              Raw (ApplianceDB, ODbL), processed and synthetic repair records + JSON schema
-  docs/              Architecture, API mapping, Live protocol, AlloyDB notes, Cloud Run guide
-  docker-compose.yml PostgreSQL + backend + frontend
+frontend/   React app (served by the backend in production)
+backend/    FastAPI app, Gemini integration, safety gate, demo scenarios, dataset pipeline, 104 tests
+data/       Repair records: ApplianceDB (ODbL) + FixSaathi curated, processed to one schema
+docs/       FEATURE_AUDIT, TECHNICAL_REPORT, DEMO_SCRIPT, SUBMISSION_CHECKLIST, architecture, API, safety, datasets
+Dockerfile  One image: builds the site, then serves the site and API from FastAPI
 ```
 
-## What is real and what is not verified
+Start with **docs/FEATURE_AUDIT.md** for what is verified and what is not.
 
-| Area | Status |
-|---|---|
-| Auth (Argon2, JWT access + rotating refresh tokens, roles, org scoping) | Implemented and tested |
-| Sessions, chat history, uploads, steps, reports, escalations, dashboard, all in PostgreSQL | Implemented and tested (unit + browser end-to-end) |
-| Server-side safety lock (REST, AI tools and live relay all go through one gate) | Implemented and tested (14 safety tests) |
-| Diagnosis, guidance, part locator, step images, chat via Gemini | Implemented, tested with a fake Gemini. **Not yet run against real Gemini.** |
-| Gemini Live WebSocket relay (audio 16 kHz in, 24 kHz out, 1 fps JPEG, tools, transcripts) | Implemented, tested with a fake Live session built from real SDK types. **Not yet run against real Gemini Live or a real microphone.** |
-| Repair knowledge base | 292 records: 280 from ApplianceDB (washer/fridge error codes, ODbL) + 12 FixSaathi curated. Postgres full-text + optional embeddings. Citations checked by the server. Tested. |
-| Similar repairs | Keyword mode tested; embeddings mode tested with fake vectors. ScaNN / pgvector **not** used (see docs/ALLOYDB.md) |
-| Open Repair Alliance data | Importer tested on a fixture. **Data not imported** (download is behind a form). |
-| Docker Compose | File validated with `docker compose config`. **Images not built here** (no Docker daemon in the build sandbox). |
-| Cloud Run | Deployment guide only. **Not deployed.** |
-| AI cost per repair | Not calculated: no verified pricing table. The dashboard says so. |
+## Deploy on Render (current setup)
 
-## Quick start (macOS, no Docker)
+The deployment is one Docker web service built from this repo's `Dockerfile`, plus a PostgreSQL database on Neon. Every push to `main` deploys automatically. Each start runs the migrations, loads the repair records if they're missing, then starts the server.
+
+Environment variables on the Render service:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `DATABASE_URL` | Neon connection string | `postgres://` and `postgresql://` are both accepted |
+| `SECRET_KEY` | 48+ random characters | Signs login tokens. Never commit it. |
+| `GEMINI_API_KEY` | your Google AI Studio key | **Required for live AI.** Server only, never sent to the browser. |
+| `GEMINI_AGENT_MODEL` | `gemini-3.6-flash` | chat, vision, diagnosis, steps |
+| `GEMINI_AGENT_FALLBACK_MODELS` | `gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash` | used only when the main model is rate-limited |
+| `GEMINI_THINKING_LEVEL` | `low` | faster replies |
+| `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | |
+| `NANO_BANANA_MODEL` | `gemini-3.1-flash-image` | step pictures |
+| `GEMINI_LIVE_MODEL` | a Live-capable model your key can use | Without one, voice uses browser speech |
+| `STORAGE_PROVIDER` | `database` | **Photos survive restarts** (stored in PostgreSQL) |
+| `VECTOR_SEARCH_MODE` | `keyword` | full-text retrieval (no embedding index is built) |
+| `APP_ENV` | `production` | |
+| `CORS_ORIGINS` | `https://fixsaathi.onrender.com` | the site is served from the same address anyway |
+
+**Uptime monitoring (free).** Render's free plan sleeps after 15 minutes idle. In UptimeRobot, add a monitor:
+- Type: **HTTP(s)**
+- URL: `https://fixsaathi.onrender.com/health`
+- Interval: **5 minutes**
+
+`/health` returns 200 only when the database answers, and 503 (`"status": "unhealthy"`) when it doesn't. It accepts GET and HEAD and is never cached. A missing AI key is reported (`ai.configured: false`) but doesn't make the app unhealthy, because demo mode still works.
+
+## Run locally (macOS)
 
 ```bash
-# 1. PostgreSQL 16
-brew install postgresql@16 && brew services start postgresql@16
-createdb fixsaathi
-
-# 2. Backend
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-#   edit .env: set SECRET_KEY (python -c "import secrets;print(secrets.token_urlsafe(48))")
-#   set DATABASE_URL=postgresql+psycopg://$USER@localhost:5432/fixsaathi
-#   optional: GEMINI_API_KEY and the four model IDs
-alembic upgrade head
-python scripts/ingest_knowledge.py            # load the 292 processed repair records
-uvicorn app.main:app --reload --port 8000      # API docs: http://localhost:8000/docs
-
-# 3. Frontend (new terminal)
-cd frontend
-cp .env.example .env                            # VITE_API_BASE_URL=http://localhost:8000
-npm ci && npm run dev                           # http://localhost:5173
+brew install postgresql@16 python@3.12 node && brew services start postgresql@16 && createdb fixsaathi
+cd backend && python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+cp .env.example .env      # set SECRET_KEY and DATABASE_URL=postgresql+psycopg://$USER@localhost:5432/fixsaathi; add GEMINI_API_KEY yourself
+python scripts/check_gemini.py --call          # checks the key and models; never prints the key
+alembic upgrade head && python scripts/ingest_knowledge.py
+uvicorn app.main:app --reload --port 8000      # API docs at http://localhost:8000/docs
+# new terminal
+cd frontend && cp .env.example .env && npm ci && npm run dev   # http://localhost:5173
 ```
 
-Open http://localhost:5173, create an account, and start a session. To see the manager dashboard, promote yourself:
+To make yourself a manager (for the dashboard): `python scripts/create_user.py --email you@example.com --role manager --org "Your Company"`
 
-```bash
-cd backend && python scripts/create_user.py --email you@example.com --role manager --org "Your Company"
-```
+## AI behaviour, and what happens without AI
 
-## Quick start (Docker)
+- **Errors:** every Gemini failure is classified (`INVALID_API_KEY`, `PERMISSION_DENIED`, `MODEL_NOT_FOUND`, `BILLING_REQUIRED`, `QUOTA_EXCEEDED`, `AI_TIMEOUT`, `NETWORK_ERROR`, `AI_BLOCKED`, ...). The chat shows the reason and a fix. The technician's message is saved either way.
+- **Retries:** free-tier rate limits are retried after the delay Google asks for, then the next fallback model is tried. Every switch is logged. Bad keys and unknown models are never retried.
+- **Without a key:** AI endpoints return `AI_NOT_CONFIGURED`. The UI says so and offers the **labelled demo scenarios** (`/demo`). Demo sessions use scripted sample content written by the team, and every screen labels them "Demo scenario: scripted sample, not live AI". The safety lock, logging and reports are the same server code as live sessions.
 
-```bash
-cp .env.example .env        # set SECRET_KEY, and Gemini values if you have them
-docker compose up --build   # frontend http://localhost:5173, API http://localhost:8000/docs
-```
+## Voice
 
-## "The AI could not reply" / AI errors
+The voice page first tries the **Gemini Live** relay (WebSocket, 16 kHz audio up, 24 kHz down). If the server's key has no Live model, it switches to **browser voice mode**: Chrome or Edge speech recognition turns speech into text, the normal Gemini chat answers through the server, and the browser reads the answer aloud. This is **not** Gemini Live streaming. Microphone denial and unsupported browsers show a clear message.
 
-Run this on the machine where the backend runs. It never prints the key:
+## Safety model (enforced in backend code)
 
-```bash
-cd backend && source .venv/bin/activate
-python scripts/check_gemini.py          # free: is the key accepted, are the model IDs visible and capable?
-python scripts/check_gemini.py --call   # + one tiny real text call and one embedding call
-```
-
-The chat now shows the exact category and a fix (for example `INVALID_API_KEY`, `PERMISSION_DENIED`, `MODEL_NOT_FOUND`, `BILLING_REQUIRED`, `QUOTA_EXCEEDED`, `NETWORK_ERROR`). The backend log line `gemini_call_failed` carries Google's own message. `GET /api/v1/ai/status` shows the configured models and the last call result.
-
-## Gemini configuration
-
-Set `GEMINI_API_KEY` and one model ID per feature in `backend/.env`. No model is substituted automatically: a missing ID returns `MODEL_NOT_CONFIGURED` for that feature, and the rest of the app keeps working. Confirm IDs your key can use at https://ai.google.dev/gemini-api/docs/models, for example in AI Studio.
-
-| Variable | Used for |
-|---|---|
-| `GEMINI_AGENT_MODEL` | chat, diagnosis, repair guidance, part locator (JSON output) |
-| `GEMINI_LIVE_MODEL` | live voice + camera (must support the Live API with audio output) |
-| `NANO_BANANA_MODEL` | step illustrations (image output) |
-| `GEMINI_EMBED_MODEL` | similar-repair search (then run `python scripts/index_knowledge.py`) |
-
-Without a key, the backend runs in development mode. Every AI endpoint returns `AI_NOT_CONFIGURED`, and the UI shows that plainly. No fake AI replies are ever shown.
+- The two safety checkboxes are **statements entered by the technician**: "power switched off at the MCB" and "checked with my own tester". FixSaathi cannot measure voltage or verify isolation, and the UI and reports say so.
+- `SafetyService.guard` is the only path that permits a power-sensitive action. REST step completion, step pictures and the Live `give_step` tool all go through it. Both statements are required, per session and per technician, and they expire after `SAFETY_CONFIRMATION_TTL_MINUTES` (default 60).
+- Locked steps are sent to the client **without their instructions**. The server decides which steps are power-sensitive: it takes the model's flag OR keyword detection.
+- The AI has no tool that can record a statement. Every blocked attempt is logged in `safety_events`.
 
 ## Tests
 
 ```bash
-cd backend
-createdb fixsaathi_test
+cd backend && createdb fixsaathi_test
 DATABASE_URL=postgresql+psycopg://$USER@localhost:5432/fixsaathi_test SECRET_KEY=test-secret-key-0123456789-abcdefghijk pytest -q
-cd ../frontend && npm test && npm run build    # 5 vitest tests + type-check + production build
+cd ../frontend && npm test && npm run build && npm run lint
 ```
 
-The tests run the Alembic migrations on a real PostgreSQL database and mock every Gemini call. No paid API calls are made.
+The backend tests run the real Alembic migrations on PostgreSQL. Gemini is replaced by a deterministic fake, so no paid calls are made.
 
-## Safety model
-
-- The two checkboxes are **technician statements**, stored per session and per technician, and expire after `SAFETY_CONFIRMATION_TTL_MINUTES`.
-- `SafetyService.guard` is the only place that permits a power-sensitive action. It is called by step completion, step illustrations, and the live `give_step` tool.
-- The model has no tool that can record confirmations. It can only ask the technician (`request_safety_confirmation`).
-- The server, not the model, decides if a live step is power-sensitive: it takes the model's flag OR keywords (open, cover, wire, terminal, capacitor...).
-- Every blocked attempt is stored in `safety_events` with the actor (`api`, `ai_tool`).
-- The UI and reports state that FixSaathi cannot measure voltage or verify isolation.
-
-Data licence: ApplianceDB-derived records are ODbL (attribution + share-alike). See docs/DATASET_SOURCES.md before commercial use.
-
-More: `docs/DATASET_SOURCES.md`, `docs/DATASET_ARCHITECTURE.md`, `docs/RAG_PIPELINE.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/LIVE_PROTOCOL.md`, `docs/ALLOYDB.md`, `docs/DEPLOY_CLOUD_RUN.md`.
+Data licence: ApplianceDB-derived records are ODbL-1.0 (attribution and share-alike). See docs/DATASET_SOURCES.md.

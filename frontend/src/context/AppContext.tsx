@@ -19,8 +19,10 @@ const AppCtx = createContext<Ctx | null>(null)
 const uid = () => Math.random().toString(36).slice(2, 10)
 
 export const toChat = (m: ServerMessage): ChatMessage => ({
-  id: m.id, role: m.role, text: m.message, at: new Date(m.created_at).getTime(), aiGenerated: m.meta?.ai_generated === true,
+  id: m.id, role: m.role, text: m.message, at: new Date(m.created_at).getTime(), aiGenerated: m.meta?.ai_generated === true, demo: m.meta?.demo === true && m.role === 'assistant',
   sources: (m.meta?.sources as SourceRef[] | undefined) ?? [],
+  // Photos saved with the message: loaded through the authenticated media endpoint when a session is reopened.
+  attachments: ((m.meta?.media_ids as string[] | undefined) ?? []).map(id => ({ id, url: `/api/v1/media/${id}`, server: true })),
 })
 
 export function AppProvider({ children }: { children: ReactNode }) {

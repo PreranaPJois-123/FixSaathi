@@ -9,7 +9,8 @@ def session_out(db: Session, s: RepairSession) -> SessionOut:
     rid = db.scalar(select(ServiceReport.id).where(ServiceReport.session_id == s.id))
     return SessionOut(id=s.id, reference=s.reference, title=s.title, appliance_type=s.appliance_type, appliance_label=APPLIANCE_LABELS.get(s.appliance_type, s.appliance_type),
                       issue_description=s.issue_description, status=s.status, technician_id=s.technician_id, technician_name=s.technician.full_name if s.technician else None,
-                      first_time_fix=s.first_time_fix, started_at=s.started_at, completed_at=s.completed_at, report_id=rid)
+                      first_time_fix=s.first_time_fix, started_at=s.started_at, completed_at=s.completed_at, report_id=rid,
+                      demo=bool((s.appliance_details or {}).get('demo_scenario')))
 
 
 def media_out(m: Media) -> MediaOut:

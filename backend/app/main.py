@@ -1,4 +1,4 @@
-import logging
+import logging, time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,12 +36,22 @@ def create_app() -> FastAPI:
     install_handlers(app)
     app.include_router(api)
 
-    @app.get('/health', tags=['health'])
+    @app.api_route('/health', methods=['GET', 'HEAD'], tags=['health'])
     def health():
-        st = get_settings()
-        return {'status': 'ok', 'env': st.app_env, 'ai': {'configured': st.ai_configured,
-                'models': {'agent': bool(st.gemini_agent_model), 'live': bool(st.gemini_live_model), 'embed': bool(st.gemini_embed_model), 'image': bool(st.nano_banana_model)}},
-                'mode': 'ai' if st.ai_configured else 'no AI key set: AI endpoints return AI_NOT_CONFIGURED'}
+        """For uptime monitors. 200 only when the database answers; 503 otherwise. AI status is reported, not required:
+        without a key the app still runs (with AI_NOT_CONFIGURED errors and the labelled demo mode)."""
+        from fastapi.responses import JSONResponse
+        st = get_settings(); t0 = time.perf_counter()
+        try:
+            db = SessionLocal(); db.execute(text('select 1')); db.close(); db_ok = True
+        except Exception:
+            db_ok = False
+        body = {'status': 'ok' if db_ok else 'unhealthy', 'env': st.app_env, 'database': 'ok' if db_ok else 'unreachable',
+                'db_ms': int((time.perf_counter() - t0) * 1000), 'storage': st.storage_provider,
+                'ai': {'configured': st.ai_configured,
+                       'models': {'agent': bool(st.gemini_agent_model), 'live': bool(st.gemini_live_model), 'embed': bool(st.gemini_embed_model), 'image': bool(st.nano_banana_model)}},
+                'mode': 'ai' if st.ai_configured else 'no AI key set: AI endpoints return AI_NOT_CONFIGURED; demo scenarios still work'}
+        return JSONResponse(body, status_code=200 if db_ok else 503, headers={'Cache-Control': 'no-store'})
 
     @app.get('/ready', tags=['health'])
     def ready():

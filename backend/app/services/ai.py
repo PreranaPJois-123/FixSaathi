@@ -1,19 +1,29 @@
 """Business services that call Gemini agents. Model output is validated and treated as untrusted data."""
 import base64, logging, time
 from google.genai import types
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from ..agents import prompts
 from ..agents.schemas import ComponentOut, DiagnosisOutput, GuidanceOutput
 from ..core.exceptions import AIError, AppError, Conflict, NotFound
 from ..db.models import (AIUsage, Conversation, DiagnosisResult, IdentifiedComponent, Media, RepairSession, RepairStep, User)
-from ..integrations.gemini.client import CallResult, get_gemini
+from ..integrations.gemini.client import CallResult, get_gemini as _live_gemini
+from ..demo.client import DemoClient, is_demo
 from ..integrations.storage.local import get_storage
 from . import knowledge_base as kb
 import re
 from .sessions import add_message, ensure_open, transition
 
 logger = logging.getLogger('ai')
+
+
+def _ai(db: Session, s: RepairSession):
+    """Labelled demo sessions use scripted content; every other session uses the real Gemini client."""
+    sc = is_demo(s)
+    if not sc:
+        return _live_gemini()
+    turns = db.scalar(select(func.count()).select_from(Conversation).where(Conversation.session_id == s.id, Conversation.role == 'assistant')) or 0
+    return DemoClient(sc, turns)
 
 
 def record_usage(db: Session, s: RepairSession | None, op: str, meta: CallResult | None, ok: bool = True, code: str | None = None, model: str = '') -> None:
@@ -54,7 +64,7 @@ async def _retrieve(db: Session, s: RepairSession, text: str) -> dict:
 
 
 async def chat_reply(db: Session, s: RepairSession, user: User, text: str, media_ids: list) -> Conversation:
-    g = get_gemini()
+    g = _ai(db, s)
     res = await _retrieve(db, s, text)
     contents: list = [prompts.wrap('knowledge', kb.context_block(res)), prompts.wrap('history', _history(db, s)), f'Appliance (from session): {s.appliance_type}',
                       prompts.wrap('technician_input', text or '(technician shared a photo)')]
@@ -67,13 +77,13 @@ async def chat_reply(db: Session, s: RepairSession, user: User, text: str, media
     allowed = {h.record_id for h in res['hits']}
     reply, used, invented = _clean_citations(reply, allowed)
     sources = [h.citation() for h in res['hits'] if h.record_id in used]
-    return add_message(db, s, 'assistant', reply, meta={'model': meta.model, 'latency_ms': meta.latency_ms, 'ai_generated': True, 'sources': sources,
+    return add_message(db, s, 'assistant', reply, meta={'model': meta.model, 'latency_ms': meta.latency_ms, 'ai_generated': meta.model != 'demo-scenario', 'demo': meta.model == 'demo-scenario', 'sources': sources,
                                                          'knowledge_coverage': res['coverage'], 'removed_invalid_citations': len(invented)})
 
 
 async def diagnose(db: Session, s: RepairSession, media_ids: list | None = None) -> DiagnosisResult:
     ensure_open(s)
-    g = get_gemini()
+    g = _ai(db, s)
     note = prompts.APPLIANCE_NOTES.get(s.appliance_type, prompts.APPLIANCE_NOTES['unknown'])
     prev = db.scalars(select(DiagnosisResult).where(DiagnosisResult.session_id == s.id).order_by(DiagnosisResult.created_at.desc()).limit(1)).first()
     res = await kb.retrieve(db, f'{s.issue_description} {_history(db, s, 6)}', category=s.appliance_type)
@@ -135,7 +145,7 @@ async def generate_steps(db: Session, s: RepairSession) -> list[RepairStep]:
     contents = [f'Appliance type: {s.appliance_type}', f'Most likely fault (model estimate): {top}', prompts.wrap('knowledge', kb.context_block(res)),
                 f'Safety requirements from diagnosis: {d.safety_requirements}', f'Escalation suggested: {d.requires_escalation}']
     try:
-        out, meta = await get_gemini().generate_json('guidance', GuidanceOutput, contents, prompts.GUIDANCE_SYSTEM)
+        out, meta = await _ai(db, s).generate_json('guidance', GuidanceOutput, contents, prompts.GUIDANCE_SYSTEM)
     except AppError as e:
         record_usage(db, s, 'guidance', None, ok=False, code=e.code, model='agent'); raise
     for x in existing:
@@ -159,7 +169,7 @@ async def identify_component(db: Session, s: RepairSession, media_id, query: str
     part = types.Part.from_bytes(data=get_storage().get(m.storage_key), mime_type=m.mime_type)
     ask = f'Appliance: {s.appliance_type}. ' + (prompts.wrap('technician_input', f'Find: {query}') if query else 'Identify the most relevant visible component for the reported issue.')
     try:
-        out, meta = await get_gemini().generate_json('part_locator', ComponentOut, [ask, part], prompts.PART_LOCATOR_SYSTEM, temperature=0.1)
+        out, meta = await _ai(db, s).generate_json('part_locator', ComponentOut, [ask, part], prompts.PART_LOCATOR_SYSTEM, temperature=0.1)
     except AppError as e:
         record_usage(db, s, 'part_locator', None, ok=False, code=e.code, model='agent'); raise
     c = IdentifiedComponent(session_id=s.id, media_id=m.id, query=query, result=out.model_dump(), model_identifier=meta.model)
@@ -174,7 +184,7 @@ async def step_visual(db: Session, s: RepairSession, step: RepairStep) -> Media:
             return m  # do not regenerate
     prompt = prompts.IMAGE_STEP_PROMPT.format(appliance=s.appliance_type, title=step.title, instruction=step.instruction)
     try:
-        data, mime, meta = await get_gemini().generate_image(prompt)
+        data, mime, meta = await _ai(db, s).generate_image(prompt)
     except AppError as e:
         record_usage(db, s, 'image_generation', None, ok=False, code=e.code, model='image'); raise
     from ..integrations.storage.local import inspect_image

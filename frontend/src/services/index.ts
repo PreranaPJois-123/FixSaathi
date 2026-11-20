@@ -28,6 +28,12 @@ export const sessionService = {
   cancel: (id: string) => api<RepairSession>(`/api/v1/sessions/${id}/cancel`, { method: 'POST' }),
 }
 
+export interface DemoScenario { id: string; title: string; appliance: string; issue: string; has_photo: boolean }
+export const demoService = {
+  list: () => api<{ label: string; items: DemoScenario[] }>('/api/v1/demo/scenarios'),
+  start: (scenario: string) => api<RepairSession>('/api/v1/demo/sessions', { body: { scenario }, timeoutMs: 30000 }),
+}
+
 export const chatService = {
   history: (sid: string) => api<Page<ServerMessage>>(`/api/v1/sessions/${sid}/messages?limit=200`),
   send: (sid: string, text: string, media_ids: string[]) => api<ChatResult>(`/api/v1/sessions/${sid}/messages`, { body: { text, media_ids }, timeoutMs: 90000 }),

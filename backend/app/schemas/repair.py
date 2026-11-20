@@ -32,6 +32,7 @@ class SessionOut(BaseModel):
     first_time_fix: bool | None
     started_at: datetime
     completed_at: datetime | None
+    demo: bool = False
     report_id: uuid.UUID | None = None
 
 

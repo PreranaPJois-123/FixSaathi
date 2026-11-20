@@ -29,8 +29,9 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   text: string
   at: number
-  attachments?: { id: string; url: string }[]
+  attachments?: { id: string; url: string; server?: boolean }[]
   aiGenerated?: boolean
+  demo?: boolean
   sources?: SourceRef[]
   notice?: 'ai_unavailable' | 'ai_error'
   hint?: string | null
@@ -46,6 +47,7 @@ export interface RepairSession {
   title: string
   appliance_type: string
   appliance_label: string
+  demo?: boolean
   issue_description: string
   status: SessionStatus
   technician_id: string
@@ -86,6 +88,7 @@ export interface ComponentResult { id: string; media_id: string; found: boolean;
 export interface Escalation { id: string; session_id: string; session_reference: string; appliance_type: string; technician: string | null; reason: string; priority: string; status: string; diagnosis_summary: string | null; resolution_notes: string | null; created_at: string; resolved_at: string | null }
 
 export interface ReportData {
+  demo?: boolean
   session: { reference: string; appliance: string; title: string; started_at: string; technician: string | null }
   customer_issue: string
   diagnosis: { problem_summary: string; faults: Fault[]; model_identifier: string; note: string } | null

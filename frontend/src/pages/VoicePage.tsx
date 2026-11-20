@@ -78,6 +78,7 @@ export default function VoicePage() {
               {v.tool ? `Working: ${v.tool.replace(/_/g, ' ')}...` : copy[v.state]}
             </motion.p>
           </AnimatePresence>
+          {mode === 'live' && liveUnavailable && !bv.supported && <p role="alert" className="max-w-sm text-center text-sm text-warn">Gemini Live is unavailable for this server key and this browser has no speech recognition. Use Chrome or Edge for voice, or type below in the chat.</p>}
           {mode === 'browser' && lv.error && !bv.error && <p className="max-w-sm text-center text-xs text-ink-3">Gemini Live is unavailable for this server key, so browser voice mode is on.</p>}
           {v.error && <p role="alert" className="max-w-sm text-center text-sm text-crit">{v.error}</p>}
           <div className="flex items-center gap-4">
@@ -89,7 +90,7 @@ export default function VoicePage() {
             <button onClick={() => { v.stop(); if (sid) nav(`/session/${sid}`) }} aria-label="End conversation" className="flex h-14 w-14 items-center justify-center rounded-full border border-crit/40 text-crit hover:bg-crit/10"><PhoneOff /></button>
           </div>
           {running && <form onSubmit={submit} className="flex w-full max-w-sm gap-2"><label className="sr-only" htmlFor="lt">Type instead</label><input id="lt" value={text} onChange={e => setText(e.target.value)} placeholder="Too noisy? Type here" className="flex-1 rounded-xl border border-line bg-[#0a1d33] px-3 py-2 text-sm outline-none focus:border-teal" /><button aria-label="Send" className="rounded-xl border border-line px-3 text-ink-2 hover:bg-surface"><Send size={16} /></button></form>}
-          <p className="max-w-sm text-center text-xs text-ink-3">{mode === 'browser' ? 'Browser voice mode: your browser turns speech into text, Gemini answers through the FixSaathi server, and your browser reads the answer aloud. Live camera is only available in Gemini Live mode.' : 'Audio goes to Gemini Live through the FixSaathi server. Raw audio and video are not stored; transcripts are saved to this session.'}</p>
+          <p className="max-w-sm text-center text-xs text-ink-3">{mode === 'browser' ? 'Browser voice mode: your browser turns speech into text, Gemini answers through the FixSaathi server, and your browser reads the answer aloud. Live camera is only available in Gemini Live mode.' : (v.state === 'listening' || v.state === 'responding') ? 'Gemini Live mode: audio streams to Gemini through the FixSaathi server. Raw audio and video are not stored; transcripts are saved to this session.' : 'Uses Gemini Live when the server\'s API key supports it; otherwise your browser\'s speech recognition, with Gemini answering through the server. Transcripts are saved to this session.'}</p>
         </div>
 
         <div className="space-y-4">

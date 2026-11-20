@@ -87,6 +87,7 @@ export default function RepairSessionPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8">
       <Link to="/history" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-2 hover:text-ink"><ChevronLeft size={16} />Repair history</Link>
+      {s.demo && <div role="note" className="mb-4 rounded-2xl border border-warn/50 bg-warn/10 px-4 py-3 text-sm text-warn"><b>Demo scenario.</b> Diagnosis, steps and replies here are scripted sample content, not live AI. The safety lock, logging and report are the real server code.</div>}
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider text-ink-3"><span className="text-teal">{s.appliance_label}</span> · Session {s.reference}</p>
@@ -95,7 +96,7 @@ export default function RepairSessionPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button className={btn} onClick={() => { void openSession(id); nav(`/assistant?session=${id}`) }}><MessageSquare size={16} />Chat</button>
-          {owner && open && <button className={btn} onClick={() => nav(`/voice?session=${id}`)}><Mic size={16} className="text-teal" />Live voice</button>}
+          {owner && open && <button className={btn} onClick={() => nav(`/voice?session=${id}`)}><Mic size={16} className="text-teal" />Voice</button>}
           {owner && open && s.status !== 'escalated' && <button onClick={() => setShowEsc(v => !v)} className="inline-flex items-center gap-2 rounded-xl border border-warn/40 px-3.5 py-2 text-sm font-medium text-warn hover:bg-warn/10"><HandHelping size={16} />Ask a senior technician</button>}
           {s.report_id && <Link to={`/reports/${s.report_id}`} className={btn}><FileText size={16} />Report</Link>}
         </div>

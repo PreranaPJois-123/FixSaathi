@@ -52,6 +52,7 @@ export default function WelcomePage() {
           <button onClick={() => nav('/voice')} className="fs-amber-bg flex h-14 items-center gap-2 rounded-full px-6 font-semibold text-bg shadow-[0_10px_30px_-10px_rgba(255,157,61,0.8)]"><Mic size={20} />Talk to FixSaathi</button>
         </div>
         <p className="hidden items-center gap-1.5 text-xs text-ink-3 md:flex"><Camera size={12} />Tip: use the camera button to show an appliance</p>
+        <button onClick={() => nav('/demo')} className="text-xs text-ink-3 underline-offset-2 hover:text-teal hover:underline">AI unavailable? Try a labelled demo scenario</button>
       </div>
       <p className="mt-6 pb-2 text-xs text-ink-3">Powered by Google Gemini. AI suggestions are estimates: check before acting.</p>
     </div>

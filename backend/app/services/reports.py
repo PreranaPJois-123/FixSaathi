@@ -18,6 +18,7 @@ def build_report_data(db: Session, s: RepairSession, outcome: str, notes: str | 
     fb = db.scalars(select(Feedback).where(Feedback.session_id == s.id)).first()
     st = current_state(db, s)
     return {
+        'demo': bool((s.appliance_details or {}).get('demo_scenario')),
         'session': {'reference': s.reference, 'appliance_type': s.appliance_type, 'appliance': APPLIANCE_LABELS.get(s.appliance_type, s.appliance_type),
                     'title': s.title, 'started_at': s.started_at.isoformat(), 'technician': s.technician.full_name if s.technician else None},
         'customer_issue': s.issue_description,

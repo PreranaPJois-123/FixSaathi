@@ -45,20 +45,30 @@ class LocalStorage:
         p = self._path(key); p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(data)
         return key
 
-    def get(self, key: str) -> bytes: return self._path(key).read_bytes()
+    def get(self, key: str) -> bytes:
+        p = self._path(key)
+        if not p.is_file():  # e.g. the host's disk was wiped by a restart
+            raise AppError('This image is no longer available.', code='MEDIA_MISSING', status=404)
+        return p.read_bytes()
 
     def delete(self, key: str) -> None: self._path(key).unlink(missing_ok=True)
 
 
-_storage: LocalStorage | None = None
+_storage = None
 
 
-def get_storage() -> LocalStorage:
+def get_storage():
+    """STORAGE_PROVIDER=local (disk; lost on hosts with ephemeral disks) or database (PostgreSQL; survives restarts)."""
     global _storage
     if _storage is None:
-        if get_settings().storage_provider != 'local':
-            raise AppError('Only STORAGE_PROVIDER=local is implemented. A Cloud Storage adapter is not included yet.', code='STORAGE_NOT_CONFIGURED', status=500)
-        _storage = LocalStorage()
+        prov = (get_settings().storage_provider or 'local').strip().lower()
+        if prov == 'local':
+            _storage = LocalStorage()
+        elif prov == 'database':
+            from .database import DatabaseStorage
+            _storage = DatabaseStorage()
+        else:
+            raise AppError(f'Unknown STORAGE_PROVIDER "{prov}". Use local or database.', code='STORAGE_NOT_CONFIGURED', status=500)
     return _storage
 
 

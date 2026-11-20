@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { BookOpenCheck, Bookmark, CircleHelp, FileText, History, LayoutDashboard, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Settings, UserRound, Users, Wrench, X } from 'lucide-react'
+import { BookOpenCheck, Bookmark, PlayCircle, CircleHelp, FileText, History, LayoutDashboard, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Settings, UserRound, Users, Wrench, X } from 'lucide-react'
 import { Emblem, Wordmark } from '../common/Logo'
 import { useApp } from '../../context/AppContext'
 import { useAuth } from '../../context/AuthContext'
@@ -19,6 +19,7 @@ const groups: { title: string; items: Item[] }[] = [
     { to: '/repairs', label: 'My Repairs', icon: Wrench },
     { to: '/diagnoses', label: 'Saved Diagnoses', icon: Bookmark },
     { to: '/senior', label: 'Senior Technician Support', icon: Users },
+    { to: '/demo', label: 'Demo Scenarios', icon: PlayCircle },
     { to: '/manager', label: 'Manager Dashboard', icon: LayoutDashboard },
   ] },
   { title: 'Account', items: [

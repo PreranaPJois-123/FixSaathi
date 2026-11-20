@@ -12,7 +12,7 @@ import AssistantPage from './pages/AssistantPage'
 const load = {
   voice: () => import('./pages/VoicePage'), session: () => import('./pages/RepairSessionPage'), history: () => import('./pages/RepairHistoryPage'),
   reports: () => import('./pages/ReportsPage'), settings: () => import('./pages/SettingsPage'), profile: () => import('./pages/ProfilePage'),
-  info: () => import('./pages/InfoPages'),
+  info: () => import('./pages/InfoPages'), demo: () => import('./pages/DemoPage'),
 }
 const VoicePage = lazy(load.voice)
 const RepairSessionPage = lazy(load.session)
@@ -20,6 +20,7 @@ const RepairHistoryPage = lazy(load.history)
 const ReportsList = lazy(() => load.reports().then(m => ({ default: m.ReportsList })))
 const ReportDetailPage = lazy(() => load.reports().then(m => ({ default: m.ReportDetailPage })))
 const SettingsPage = lazy(load.settings)
+const DemoPage = lazy(load.demo)
 const ProfilePage = lazy(load.profile)
 const SavedDiagnoses = lazy(() => load.info().then(m => ({ default: m.SavedDiagnoses })))
 const SeniorSupport = lazy(() => load.info().then(m => ({ default: m.SeniorSupport })))
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="reports/:id" element={<ReportDetailPage />} />
               <Route path="diagnoses" element={<SavedDiagnoses />} />
               <Route path="senior" element={<SeniorSupport />} />
+              <Route path="demo" element={<DemoPage />} />
               <Route path="manager" element={<ManagerDashboard />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="profile" element={<ProfilePage />} />
