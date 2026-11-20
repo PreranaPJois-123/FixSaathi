@@ -1,7 +1,7 @@
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-APPLIANCES = ('ceiling_fan', 'split_ac', 'washing_machine', 'refrigerator', 'mcb_electrical', 'rooftop_solar', 'unknown')
+APPLIANCES = ('ceiling_fan', 'split_ac', 'washing_machine', 'refrigerator', 'mcb_electrical', 'rooftop_solar', 'microwave_oven', 'water_purifier', 'unknown')
 EvidenceSource = Literal['observed_in_image', 'technician_statement', 'ai_inference', 'unknown']
 
 
@@ -29,6 +29,8 @@ class DiagnosisOutput(BaseModel):
     requires_escalation: bool = False
     confirmed_findings: list[str] = Field(default_factory=list, max_length=8, description='Only what the technician stated or what is clearly visible')
     missing_information: list[str] = Field(default_factory=list, max_length=6)
+    required_tools: list[str] = Field(default_factory=list, max_length=8, description='Tools the checks need, e.g. tester, multimeter, screwdriver set')
+    escalation_reason: str | None = Field(default=None, max_length=300, description='Why a senior technician is needed, when requires_escalation is true')
 
     @field_validator('appliance_type')
     @classmethod

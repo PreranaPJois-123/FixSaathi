@@ -10,7 +10,7 @@ Team Tensor Trailblazers (Prerana P Jois, Priyam Thakur). Google Startup Buildat
 | API | FastAPI, Pydantic v2, SQLAlchemy 2, Alembic | Login, repair sessions, chat, diagnosis and step agents, the server-side safety gate, retrieval, reports, dashboard, the Live voice WebSocket relay. |
 | Auth | JWT access tokens (30 min), rotating hashed refresh tokens, Argon2 passwords, technician/manager/admin roles | Each user sees only their own or their organisation's sessions. |
 | AI | Google Gemini via the official `google-genai` SDK, called only from the server | `gemini-3.6-flash` for chat, vision and structured JSON, with fallbacks `gemini-3.5-flash`, `gemini-3.1-flash-lite` and `gemini-2.5-flash`. `gemini-embedding-001` for embeddings. `gemini-3.1-flash-image` (Nano Banana) for step pictures. Live API relay. |
-| Knowledge | `repair_records` table: 292 records with a PostgreSQL full-text (GIN) index and brand, model and error-code fields | Retrieval-grounded answers with sources. The server removes any record ID the model invents. Each answer gets a coverage label: grounded, partial or none. |
+| Knowledge | `repair_records` table: 377 records across 8 appliance categories (253 washing machine, 41 refrigerator, 28 split AC, 19 ceiling fan, 18 water purifier, 16 microwave, 1 MCB, 1 solar), with a PostgreSQL full-text (GIN) index and brand, model and error-code fields | Retrieval within the detected appliance, with sources. The server removes any record ID the model invents. Each answer gets a coverage label: grounded, partial or none. **No model is trained or fine-tuned**: Gemini is used through its API with this retrieved evidence. |
 | Database | PostgreSQL on Neon (free tier) | Users, sessions, messages, safety events, steps, reports, repair records, and **photos** (`stored_files`, with `STORAGE_PROVIDER=database`). |
 | Demo mode | `app/demo/` with 2 scripted scenarios | Lets the product be shown without AI. The content is labelled; the safety gate, logging and reports are real. |
 | Hosting | Render, as one Docker service in the Singapore region | One service serves both the website and the API over HTTPS. The Gemini key stays on the server. |
@@ -70,15 +70,25 @@ Evidence levels:
 4. **User journey:** added an appliance picker to the start screen. Session titles are now clean first sentences.
 5. **Deployment:** one service serving both site and API from the same address (same-origin WebSocket). The app accepts `postgres://` database URLs. Added `.gitignore` and `.dockerignore`, so the `.env` file and keys can't be committed.
 
+## 3b. Knowledge base update (20 Nov 2026, evening)
+
+- **85 records added** from 21 public manufacturer pages and user manuals (LG, Daikin India, Samsung, Crompton, Orient, Kent, Eureka Forbes Aquaguard). Each keeps its source title, URL, source type, evidence level and access date. Text is paraphrased, not copied. The original 292 records are unchanged (checked record by record).
+- **Two new appliances:** microwave oven and water purifier, end to end (start-screen tiles, sessions, prompts, safety policy).
+- **Appliance-aware retrieval:** when a session has no appliance yet, it is detected from the text, so a fridge question no longer pulls washing-machine records. Fixed a bug where "fridge not cooling" was guessed as a split AC.
+- **Error-code aliases:** a source's alternatives (LG `CH38 / F4`) match as whole tokens, so `E1` never matches `E10`. Spaced codes (`CH 38`) are read too.
+- **Diagnosis output** now includes required tools and an escalation reason (migration `0004`, additive).
+- **Microwave rule in server code:** any generated step that opens the cabinet or touches the magnetron, high-voltage capacitor, diode or transformer becomes a hand-over to authorised service.
+- **Quality report** (`docs/DATASET_QUALITY_REPORT.md`): 0 duplicates, 0 invalid categories, 0 conflicting code meanings, 365 of 377 records with a source URL. The 12 without one are FixSaathi team guidance, attributed to the team.
+
 ## 4. Test results (run 20 Nov 2026)
 
 | Suite | Result |
 |---|---|
-| Backend pytest (real PostgreSQL, fake Gemini) | **104 passed, 0 failed** |
+| Backend pytest (real PostgreSQL, fake Gemini) | **132 passed, 0 failed** (28 new: dataset quality, appliance detection, retrieval per appliance, code aliases, microwave rule, new diagnosis fields) |
 | Frontend unit tests (Vitest) | **5 passed** |
 | TypeScript type check and production build | Pass |
 | Lint (oxlint) | 0 errors, 3 warnings (re-render performance hints) |
-| Browser end-to-end, real Chrome against the production-style single service | **29 of 29 checks pass**: login and errors, register, refresh survives reload, chat, sidebar, camera capture, component box, diagnosis, image evidence, lock, server 409 refusal, one statement keeps the lock, both unlock, step completion, step picture, report contents, safety disclaimer, history, saved diagnoses, roles, manager dashboard, voice on a closed session, mobile without horizontal scroll |
+| Browser end-to-end, real Chrome against the production-style single service (re-run after the knowledge update) | **29 of 29 checks pass**: login and errors, register, refresh survives reload, chat, sidebar, camera capture, component box, diagnosis, image evidence, lock, server 409 refusal, one statement keeps the lock, both unlock, step completion, step picture, report contents, safety disclaimer, history, saved diagnoses, roles, manager dashboard, voice on a closed session, mobile without horizontal scroll |
 | Browser test for a provider failure | Pass: the specific "API key invalid" error and its fix hint are shown |
 | Browser demo-mode test, **no AI key**, `STORAGE_PROVIDER=database`, server restarted mid-test | **16 of 16 pass**: health, AI-unavailable notice, demo link, labels, photo, banner, lock (409), photo after restart, unlock, demo report label, 401 without a token, no page errors |
 | Console or page errors during the full screenshot journey | 0 |
@@ -92,7 +102,8 @@ Evidence levels:
 - **Gemini Live:** not available on the current key. Voice uses browser speech plus Gemini.
 - **Free Render plan:** sleeps after 15 minutes idle, and the first request afterwards takes about 50 seconds. Keep it awake with a free uptime monitor, or use the Starter plan.
 - **Photo storage:** photos are stored in Neon, whose free tier has limited storage (about 0.5 to 1 GB). That's fine for the evaluation; move to Cloud Storage for scale.
-- **Knowledge base:** 253 of 292 records are washing machines. AC, fans, electrical and solar have very few.
+- **Knowledge base:** 377 records. Washing machines still make up 253, because the ApplianceDB sample is mostly washers and we kept every useful record. Microwave and purifier records come from a few brands only (Samsung; Kent, Aquaguard). MCB and solar have 1 record each. No record is technician-reviewed yet.
+- **Retrieval accuracy is not measured.** Tests check that answers stay in the right appliance and return the expected record for one realistic query per appliance. There is no labelled evaluation set, so no accuracy figure is claimed.
 - **Data licence:** ApplianceDB is ODbL-1.0 (attribution and share-alike). Keep the attribution.
 - **Free-tier key:** small per-minute limits. The fallback models help, but heavy use during judging can still slow replies.
 

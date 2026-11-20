@@ -86,6 +86,8 @@ class DiagnosisResult(IdMixin, CreatedMixin, Base):
     requires_escalation: Mapped[bool] = mapped_column(Boolean, default=False)
     confirmed_findings: Mapped[list] = mapped_column(JSONType, default=list)
     missing_information: Mapped[list] = mapped_column(JSONType, default=list)
+    required_tools: Mapped[list] = mapped_column(JSONType, default=list)
+    escalation_reason: Mapped[str | None] = mapped_column(Text)
     knowledge_coverage: Mapped[str] = mapped_column(String(12), default='none')
     sources: Mapped[list] = mapped_column(JSONType, default=list)
     model_identifier: Mapped[str] = mapped_column(String(80))

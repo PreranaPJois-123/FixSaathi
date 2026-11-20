@@ -16,18 +16,11 @@ TRANSITIONS: dict[str, set[str]] = {
 }
 TERMINAL = {'completed', 'cancelled'}
 APPLIANCE_LABELS = {'ceiling_fan': 'Ceiling fan', 'split_ac': 'Split AC', 'washing_machine': 'Washing machine', 'refrigerator': 'Refrigerator',
-                    'mcb_electrical': 'MCB / electrical', 'rooftop_solar': 'Rooftop solar', 'unknown': 'Appliance'}
-KEYWORDS = [('split_ac', ('ac ', ' ac', 'air condition', 'split', 'cooling')), ('ceiling_fan', ('fan', 'pankha')),
-            ('washing_machine', ('washing', 'washer', 'spin', 'drum')), ('refrigerator', ('fridge', 'refrigerator', 'freezer')),
-            ('mcb_electrical', ('mcb', 'trip', 'breaker', 'rccb')), ('rooftop_solar', ('solar', 'inverter', 'panel'))]
-
-
+                    'mcb_electrical': 'MCB / electrical', 'rooftop_solar': 'Rooftop solar', 'microwave_oven': 'Microwave oven',
+                    'water_purifier': 'Water purifier', 'unknown': 'Appliance'}
 def guess_appliance(text: str) -> str:
-    t = f' {text.lower()} '
-    for app, kws in KEYWORDS:
-        if any(k in t for k in kws):
-            return app
-    return 'unknown'
+    from ..datasets.normalize import detect_appliance
+    return detect_appliance(text)
 
 
 def transition(s: RepairSession, new: str) -> None:

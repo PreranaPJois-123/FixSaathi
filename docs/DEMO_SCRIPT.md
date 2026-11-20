@@ -30,7 +30,7 @@
 | 0:20–0:40 | FixSaathi home screen | Hover over the appliance tiles | "FixSaathi puts an expert in the technician's phone. Pick the appliance, describe the problem in Hindi or English, show a photo, and get guided, safe steps and a finished service report." | *FixSaathi: an AI repair copilot* |
 | 0:40–1:05 | Home, then chat | Click **Ceiling fan**. Click the photo button and attach the burnt-fan photo. Type: *"ceiling fan humming aur slow tha, ab ceiling par burn marks hain. kya inspect karun?"* Press Enter. **Cut the wait.** | "Here's a real job: the fan was humming, and now there are burn marks on the ceiling. I add the photo and ask in Hinglish." | *Real Gemini, live* |
 | 1:05–1:25 | Gemini's reply | Slowly scroll the reply | "Gemini reads the photo, spots the burn marks and calls out likely burnt wiring. Before anything else, it tells me to switch off the MCB and check with my tester, and it recommends a senior technician." | *Vision + safety-first advice* |
-| 1:25–1:50 | Repair workspace | Click **Open repair workspace**. Click **Run diagnosis** and cut the wait. Point at the faults, their confidence and the "Backed by repair records" tag. | "In the workspace, FixSaathi ranks likely causes. Each one is backed by matching records from our repair knowledge base, with sources, and marked as an AI estimate, not a fact." | *Grounded in 292 repair records* |
+| 1:25–1:50 | Repair workspace | Click **Open repair workspace**. Click **Run diagnosis** and cut the wait. Point at the faults, their confidence and the "Backed by repair records" tag. | "In the workspace, FixSaathi ranks likely causes. Each one is backed by matching records from our repair knowledge base, with sources, and marked as an AI estimate, not a fact." | *Grounded in 377 repair records* |
 | 1:50–2:15 | Steps and safety panel | Click **Generate steps** and cut the wait. Click the checkbox on the locked "Open the canopy" step and show the refusal. | "Now the important part. Any step that needs the power off is locked by the server. Its instructions aren't even sent to the phone. Watch: the server refuses." | *Locked on the server, not in a prompt* |
 | 2:15–2:30 | Safety panel | Tick **power off**, then tick **tester checked**. The steps unlock. | "Only when I record both statements, power off and tester checked, do the steps unlock. The AI can't skip this, and every attempt is logged." | *Both statements, then unlock* |
 | 2:30–2:45 | Report | Mark steps done. Choose **Escalated**, add a note, click **Create report**, then scroll the report. | "When I'm done, the service report writes itself: issue, diagnosis, steps performed, parts and recorded safety statements, ready for the manager." | *Auto service report* |
@@ -48,7 +48,7 @@ Open **Demo Scenarios** in the sidebar and choose **Ceiling fan: burn marks arou
 
 **Say:**
 - It's built on Google Gemini.
-- It's grounded in 292 repair records.
+- It's grounded in 377 repair records across six appliances, each with its source. Gemini is used through its API; we haven't fine-tuned a model.
 - The safety lock is enforced on the server.
 - Every attempt is logged.
 - It's live on Render, with a Neon database.

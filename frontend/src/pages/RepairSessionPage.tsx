@@ -159,8 +159,9 @@ export default function RepairSessionPage() {
               </ul>
               {diag.follow_up_questions.length > 0 && <div className="mt-2 text-sm"><p className="text-ink-2">Questions to answer:</p><ul className="list-disc pl-5">{diag.follow_up_questions.map(q => <li key={q}>{q}</li>)}</ul></div>}
               {diag.missing_information?.length > 0 && <div className="mt-2 text-sm"><p className="text-ink-2">Still unknown:</p><ul className="list-disc pl-5">{diag.missing_information.map(q => <li key={q}>{q}</li>)}</ul></div>}
+              {(diag.required_tools?.length ?? 0) > 0 && <p className="mt-2 text-sm"><span className="text-ink-2">Tools needed:</span> {diag.required_tools!.join(', ')}</p>}
               {diag.sources?.length > 0 && <SourceList sources={diag.sources} />}
-              {diag.requires_escalation && <p className="mt-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">The AI recommends a senior technician for this fault.</p>}
+              {diag.requires_escalation && <p className="mt-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">The AI recommends a senior technician for this fault.{diag.escalation_reason ? ` ${diag.escalation_reason}` : ''}</p>}
               <p className="mt-3 text-xs text-ink-3">{diag.confidence_note} Model: {diag.model_identifier}</p>
             </>)}
           </section>

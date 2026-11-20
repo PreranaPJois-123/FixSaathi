@@ -30,7 +30,12 @@ What each evidence level means:
 | Component box on the photo | Done | Tested; **not verified live** |
 | Step pictures (Nano Banana) | Done | Tested; **not verified live**. The model is visible to the key. |
 | Error classification and fix hints, rate-limit retries, model fallback | Done | Tested with real SDK error classes |
-| Grounding in 292 repair records, invented citations removed, coverage label | Done | Tested |
+| Grounding in 377 repair records, invented citations removed, coverage label | Done | Tested |
+| Appliance-aware retrieval (detected from text when the session has none) | Done | Tested: one realistic query per appliance stays in its category |
+| Microwave oven and water purifier support | Done | Tested (data, detection, retrieval, microwave server rule). Not verified live. |
+| Error-code aliases (`CH38 / F4`), spaced codes (`CH 38`) | Done | Tested |
+| Required tools and escalation reason in diagnosis | Done | Tested with fake Gemini. Not verified live. |
+| Fine-tuned or custom-trained model | **Not built** | FixSaathi uses Gemini through its API with retrieval. We do not claim a trained model. |
 | Embedding re-ranking | Code exists, not used in deployment | No index built; deployment uses `VECTOR_SEARCH_MODE=keyword` |
 | **Gemini Live** streaming voice and camera | Built, not usable with the current key | Tested with a fake Live session. The key lists no Live model. |
 | Browser voice mode (speech recognition to Gemini chat to speech) | Done | Verified manually in Chrome. Not automatable in headless Chrome. |

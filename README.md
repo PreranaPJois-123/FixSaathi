@@ -7,13 +7,35 @@ FixSaathi is a repair copilot for appliance field technicians. The technician pi
 
 ```
 frontend/   React app (served by the backend in production)
-backend/    FastAPI app, Gemini integration, safety gate, demo scenarios, dataset pipeline, 104 tests
-data/       Repair records: ApplianceDB (ODbL) + FixSaathi curated, processed to one schema
+backend/    FastAPI app, Gemini integration, safety gate, demo scenarios, dataset pipeline, 132 tests
+data/       377 repair records: ApplianceDB (ODbL), manufacturer documentation (summarised, with links), FixSaathi guidance
 docs/       FEATURE_AUDIT, TECHNICAL_REPORT, DEMO_SCRIPT, SUBMISSION_CHECKLIST, architecture, API, safety, datasets
 Dockerfile  One image: builds the site, then serves the site and API from FastAPI
 ```
 
 Start with **docs/FEATURE_AUDIT.md** for what is verified and what is not.
+
+## How the AI works
+
+FixSaathi does **not** use a trained or fine-tuned model. It calls Google Gemini through its API and grounds every answer in a curated repair knowledge base of **377 records** (retrieval-augmented generation):
+
+1. The appliance comes from the session, or is detected from the technician's words (`fridge not cooling` is a refrigerator, not an AC).
+2. Brand, model and error codes are extracted (`CH 38`, `CH38` and the alias `F4` all match LG's record).
+3. PostgreSQL full-text search ranks records **within that appliance only**, preferring the same brand and manufacturer-documented sources.
+4. Gemini gets those records as tagged evidence. The server deletes any citation that wasn't retrieved, and marks a fault as unverified when no record supports it.
+5. The safety gate is server code: power steps stay locked until both statements are recorded, and microwave steps that would open the cabinet are replaced with a hand-over to authorised service.
+
+| Appliance | Records |
+|---|---|
+| Washing machine | 253 |
+| Refrigerator | 41 |
+| Split AC | 28 |
+| Ceiling fan | 19 |
+| Water purifier | 18 |
+| Microwave oven | 16 |
+| MCB / electrical, rooftop solar | 1 each |
+
+See `docs/DATASET_QUALITY_REPORT.md`, `docs/SOURCE_ATTRIBUTION.md` and `docs/RAG_PIPELINE.md`. To rebuild the data: `python scripts/process_datasets.py`, then `python scripts/dataset_quality_report.py`.
 
 ## Deploy on Render (current setup)
 

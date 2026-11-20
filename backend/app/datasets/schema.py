@@ -7,14 +7,14 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 # Primary FixSaathi categories plus related ones imported from sources. Extend freely; nothing else is hard-coded to this list.
 CATEGORIES = {
     'washing_machine', 'refrigerator', 'split_ac', 'ceiling_fan', 'mcb_electrical', 'rooftop_solar',
-    'dryer', 'dishwasher', 'oven_range', 'aircon_dehumidifier', 'fan_other',
+    'dryer', 'dishwasher', 'oven_range', 'aircon_dehumidifier', 'fan_other', 'microwave_oven', 'water_purifier',
 }
 # Categories retrieval may fall back to (labelled as related) when the primary one has little data.
 RELATED = {'split_ac': ['aircon_dehumidifier'], 'ceiling_fan': ['fan_other']}
 
 VerificationStatus = Literal['verified_source', 'technician_reviewed', 'unverified', 'synthetic_demo']
 VERIFICATION_MEANING = {
-    'verified_source': 'Upstream source states this was derived from an official manufacturer listing. Not re-verified by FixSaathi.',
+    'verified_source': 'Taken from manufacturer documentation on the manufacturer\'s own site, or the upstream dataset states it was derived from an official manufacturer listing. Not re-verified by FixSaathi.',
     'technician_reviewed': 'Reviewed by a named field technician for FixSaathi.',
     'unverified': 'Imported from a secondary or community source, or authored by the FixSaathi team, and not reviewed by a technician.',
     'synthetic_demo': 'Made-up demonstration record. Never real repair history. Excluded from retrieval unless explicitly enabled.',
@@ -79,6 +79,6 @@ class RepairRecord(BaseModel):
         return self
 
     def search_text(self) -> str:
-        parts = [self.appliance_category.replace('_', ' '), self.appliance_brand, self.appliance_model, self.error_code, *self.reported_symptoms,
+        parts = [self.appliance_category.replace('_', ' '), self.appliance_brand, self.appliance_model, self.error_code, self.error_code_original if self.error_code_original != self.error_code else None, *self.reported_symptoms,
                  *self.observed_conditions, *self.possible_faults, *self.suspected_components, self.recommended_repair or '', *self.repair_steps]
         return ' | '.join(p for p in parts if p)

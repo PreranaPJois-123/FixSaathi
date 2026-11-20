@@ -123,6 +123,7 @@ async def diagnose(db: Session, s: RepairSession, media_ids: list | None = None)
     d = DiagnosisResult(session_id=s.id, problem_summary=out.problem_summary, faults=[f.model_dump() for f in out.possible_faults],
                         recommended_checks=out.recommended_checks, follow_up_questions=out.follow_up_questions, safety_requirements=out.safety_requirements,
                         requires_escalation=out.requires_escalation, confirmed_findings=out.confirmed_findings, missing_information=out.missing_information,
+                        required_tools=out.required_tools, escalation_reason=out.escalation_reason if out.requires_escalation else None,
                         knowledge_coverage=res['coverage'], sources=[h.citation() for h in res['hits'] if h.record_id in used],
                         model_identifier=meta.model, latency_ms=int((time.perf_counter() - t0) * 1000))
     if s.appliance_type == 'unknown' and out.appliance_type != 'unknown':
@@ -130,6 +131,11 @@ async def diagnose(db: Session, s: RepairSession, media_ids: list | None = None)
     transition(s, 'active')
     db.add(d); record_usage(db, s, 'diagnosis', meta); db.flush()
     return d
+
+
+MICROWAVE_INTERNAL = re.compile(r'\b(cabinet|outer (case|cover)|remove (the )?(cover|case|casing|panel)|open(ing)? (the )?(oven|microwave|case|casing|cover|panel)|unscrew|magnetron|high[- ]voltage|hv (capacitor|diode|transformer)|capacitor|diode|transformer|interlock switch)\b', re.I)
+MICROWAVE_ESCALATION = ('Do not open the microwave. Its high-voltage capacitor can hold a lethal charge even after unplugging. '
+                        'Unplug the oven, note the symptom and model number, and hand it to authorised service.')
 
 
 async def generate_steps(db: Session, s: RepairSession) -> list[RepairStep]:
@@ -154,8 +160,15 @@ async def generate_steps(db: Session, s: RepairSession) -> list[RepairStep]:
     from .live import POWER_WORDS
     cited = [r for r in out.record_ids if r in {h.record_id for h in res['hits']}]
     # The server re-checks power sensitivity; source steps from unverified records never relax it.
+    handover: set[int] = set()
+    if s.appliance_type == 'microwave_oven':  # enforced here, not left to the prompt
+        for i, o in enumerate(out.steps):
+            if MICROWAVE_INTERNAL.search(f'{o.title} {o.instruction}'):
+                o.kind, o.requires_power_off, o.title, o.instruction = 'escalation', False, 'Hand over to authorised service', MICROWAVE_ESCALATION
+                handover.add(i)  # describes no work, so it stays readable; the unsafe instruction it replaced is gone
     steps = [RepairStep(session_id=s.id, step_number=i + 1, title=o.title, instruction=o.instruction, kind=o.kind,
-                        requires_power_off=o.requires_power_off or bool(POWER_WORDS.search(f'{o.title} {o.instruction}')), source_record_ids=cited)
+                        requires_power_off=i not in handover and (o.requires_power_off or bool(POWER_WORDS.search(f'{o.title} {o.instruction}'))),
+                        source_record_ids=cited)
              for i, o in enumerate(out.steps)]
     db.add_all(steps); record_usage(db, s, 'guidance', meta)
     transition(s, 'guidance_in_progress'); db.flush()

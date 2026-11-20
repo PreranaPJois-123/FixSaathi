@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-Appliance = Literal['ceiling_fan', 'split_ac', 'washing_machine', 'refrigerator', 'mcb_electrical', 'rooftop_solar', 'unknown']
+Appliance = Literal['ceiling_fan', 'split_ac', 'washing_machine', 'refrigerator', 'mcb_electrical', 'rooftop_solar', 'microwave_oven', 'water_purifier', 'unknown']
 
 
 class SessionCreate(BaseModel):
@@ -85,6 +85,8 @@ class DiagnosisOut(BaseModel):
     requires_escalation: bool
     confirmed_findings: list[str] = []
     missing_information: list[str] = []
+    required_tools: list[str] = []
+    escalation_reason: str | None = None
     knowledge_coverage: str = 'none'
     sources: list[dict] = []
     model_identifier: str

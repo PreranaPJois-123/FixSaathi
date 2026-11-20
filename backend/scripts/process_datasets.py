@@ -8,7 +8,7 @@ import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _paths import PROCESSED, RAW, SCHEMAS, SYNTHETIC
 from app.agents.prompts import KNOWLEDGE_FILE
-from app.datasets.importers import appliancedb, curated, openrepair
+from app.datasets.importers import appliancedb, curated, manufacturer_docs, openrepair
 from app.datasets.pipeline import report, to_jsonl, validate
 from app.datasets.schema import RepairRecord
 
@@ -22,6 +22,9 @@ def main():
         c, s = appliancedb.load(adb, commit); candidates += c; skipped['appliancedb'] = s
     else:
         print('ApplianceDB not found in data/raw/appliancedb (run download_datasets.py)')
+    mfr = RAW / 'manufacturer_docs'
+    if (mfr / 'records.json').exists():
+        c, s = manufacturer_docs.load(mfr); candidates += c; skipped['manufacturer_docs'] = s
     for f in sorted((RAW / 'openrepair').glob('*.csv')) if (RAW / 'openrepair').exists() else []:
         c, s = openrepair.load(f); candidates += c; skipped[f'openrepair:{f.name}'] = s
     records, rejected = validate(candidates)

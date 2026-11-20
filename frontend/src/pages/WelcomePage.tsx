@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { AirVent, Camera, Fan, Mic, Refrigerator, Sun, WashingMachine, Zap } from 'lucide-react'
+import { AirVent, Camera, Droplets, Fan, Mic, Microwave, Refrigerator, Sun, WashingMachine, Zap } from 'lucide-react'
 import { Emblem } from '../components/common/Logo'
 import { Composer } from '../components/composer/Composer'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { appliances, suggestions } from '../constants/prompts'
 
-const ICON = { split_ac: AirVent, washing_machine: WashingMachine, refrigerator: Refrigerator, ceiling_fan: Fan, mcb_electrical: Zap, rooftop_solar: Sun } as const
+const ICON = { split_ac: AirVent, washing_machine: WashingMachine, refrigerator: Refrigerator, ceiling_fan: Fan, microwave_oven: Microwave, water_purifier: Droplets, mcb_electrical: Zap, rooftop_solar: Sun } as const
 
 export default function WelcomePage() {
   const { send, newSession } = useApp()
@@ -31,7 +31,7 @@ export default function WelcomePage() {
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }} className="w-full">
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-ink-3">1. What are you repairing?</p>
-          <div role="radiogroup" aria-label="Appliance" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div role="radiogroup" aria-label="Appliance" className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {appliances.map(a => { const I = ICON[a.id]; const on = appliance === a.id
               return <button key={a.id} role="radio" aria-checked={on} onClick={() => setAppliance(on ? null : a.id)}
                 className={`flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-3 text-xs transition-colors ${on ? 'border-teal bg-teal/15 text-ink' : 'border-line bg-surface/40 text-ink-2 hover:border-teal/60 hover:text-ink'}`}>

@@ -8,6 +8,7 @@ BRANDS = {
     'bluestar': 'Blue Star', 'panasonic': 'Panasonic', 'hitachi': 'Hitachi', 'carrier': 'Carrier', 'lloyd': 'Lloyd', 'onida': 'Onida',
     'crompton': 'Crompton', 'havells': 'Havells', 'orient': 'Orient', 'usha': 'Usha', 'bajaj': 'Bajaj', 'atomberg': 'Atomberg', 'zanussi': 'Zanussi',
     'electrolux': 'Electrolux', 'siemens': 'Siemens', 'aeg': 'AEG', 'kenwood': 'Kenwood', 'dyson': 'Dyson',
+    'kent': 'Kent', 'aquaguard': 'Aquaguard', 'eureka forbes': 'Aquaguard', 'pureit': 'Pureit', 'livpure': 'Livpure', 'ao smith': 'AO Smith',
 }
 UNKNOWN_BRAND = {'', 'unknown', 'n/a', 'na', 'none', '?', '-', 'not known', 'no brand', 'generic'}
 
@@ -16,7 +17,8 @@ CATEGORY = {
     'refrigerator': 'refrigerator', 'fridge': 'refrigerator', 'fridge/freezer': 'refrigerator',
     'dryer': 'dryer', 'dishwasher': 'dishwasher', 'oven_range': 'oven_range',
     'split_ac': 'split_ac', 'aircon/dehumidifier': 'aircon_dehumidifier', 'fan': 'fan_other', 'ceiling_fan': 'ceiling_fan',
-    'mcb_electrical': 'mcb_electrical', 'rooftop_solar': 'rooftop_solar',
+    'mcb_electrical': 'mcb_electrical', 'rooftop_solar': 'rooftop_solar', 'microwave': 'microwave_oven', 'microwave_oven': 'microwave_oven',
+    'water purifier': 'water_purifier', 'water_purifier': 'water_purifier',
 }
 
 COMPONENTS = {
@@ -73,7 +75,7 @@ def symptoms(text: str | None) -> list[str]:
 
 
 KW = {'error', 'code', 'err', 'showing', 'shows', 'show', 'displaying', 'displays', 'display', 'blinking', 'flashing'}
-NOT_CODE = {'on', 'is', 'in', 'an', 'the', 'and', 'of', 'to', 'it', 'me', 'my', 'no', 'not', 'ka', 'ki', 'hai', 'aa', 'raha', 'rahi', 'number', 'code', 'error'}
+NOT_CODE = {'on', 'is', 'in', 'an', 'the', 'and', 'of', 'to', 'it', 'me', 'my', 'no', 'not', 'ka', 'ki', 'hai', 'aa', 'raha', 'rahi', 'number', 'code', 'error', 'par', 'pe', 'mein', 'me', 'pr', 'bhi', 'hi'}
 
 
 def extract_codes(text: str) -> list[str]:
@@ -85,6 +87,10 @@ def extract_codes(text: str) -> list[str]:
     for i, w in enumerate(words):
         lw = w.lower()
         prev = words[i - 1].lower() if i else ''
+        if lw == 'ch' and i + 1 < len(words) and re.fullmatch(r'\d{1,3}', words[i + 1]):  # LG writes 'CH 38' as well as 'CH38'
+            out.append(error_code(w + words[i + 1])); continue
+        if prev == 'ch' and re.fullmatch(r'\d{1,3}', lw):
+            continue
         if re.fullmatch(r'(?=[a-z0-9-]*\d)(?=[a-z0-9-]*[a-z])[a-z0-9-]{2,6}', lw) and not re.fullmatch(r'\d+(am|pm|kg|hz|w|v|s|min|hp|ton|tr|l)', lw):
             out.append(error_code(w))
         elif prev in KW and lw not in NOT_CODE and lw not in KW and re.fullmatch(r'[a-z]{2,3}|\d{1,3}', lw):
@@ -113,6 +119,8 @@ CATEGORY_SAFETY = {
     'fan_other': ['Unplug before opening.'],
     'mcb_electrical': ['Isolate upstream and verify with your own tester before touching the board.'],
     'rooftop_solar': ['DC side can remain live in daylight. Escalate DC and inverter work to a qualified solar technician.'],
+    'microwave_oven': ['Unplug before cleaning. Never remove the outer cabinet: the high-voltage capacitor can hold a lethal charge after unplugging. Magnetron, door interlock and internal work is for authorised service only.'],
+    'water_purifier': ['Close the inlet valve and unplug before touching filters or tubing. Filter, membrane, UV lamp and SMPS work is for an authorised technician.'],
     'dryer': ['Unplug before opening.'], 'dishwasher': ['Unplug and isolate water before opening.'], 'oven_range': ['Isolate power (and gas where fitted) before opening.'],
 }
 
@@ -123,3 +131,28 @@ def safety_policy(category_: str, step_list: list[str]) -> tuple[bool, list[str]
     if needs:
         pol.append('FixSaathi keeps power-sensitive steps locked until the technician records power-off and tester-check statements.')
     return needs, pol
+
+
+# Appliance detection from free text. Named appliances are checked before generic words, so "fridge not cooling" is a
+# refrigerator, "AC indoor fan" is an AC and "ceiling fan" is a fan. Order matters.
+APPLIANCE_PATTERNS = [
+    ('microwave_oven', r'\bmicro ?waves?\b'),
+    ('water_purifier', r'\bpurifiers?\b|\bro (?:water|filter|purifier|machine|system|unit|membrane)\b|\bwater filter\b|\b(?:aquaguard|kent|pureit|livpure)\b'),
+    ('refrigerator', r'\bfridges?\b|\brefrigerators?\b|\bfreezers?\b|\bfrij\b'),
+    ('washing_machine', r'\bwashing\b|\bwashers?\b|\bwasher\b|\b(?:top|front) ?load\b'),
+    ('split_ac', r'\bsplit\b|\bacs?\b|\bair ?condition\w*|\baircon\b'),
+    ('ceiling_fan', r'\bceiling fans?\b|\bfans?\b|\bpankha\b'),
+    ('mcb_electrical', r'\bmcb\b|\brccb\b|\belcb\b|\bbreaker\b|\bdistribution board\b'),
+    ('rooftop_solar', r'\bsolar\b'),
+]
+WEAK_APPLIANCE_PATTERNS = [('split_ac', r'\bcooling\b'), ('washing_machine', r'\bspin\w*|\bdrum\b'), ('mcb_electrical', r'\btrip\w*')]
+
+
+def detect_appliance(text: str | None) -> str:
+    """Best guess at the appliance a technician is describing, or 'unknown'. Deterministic and explainable."""
+    t = (text or '').lower()
+    for pats in (APPLIANCE_PATTERNS, WEAK_APPLIANCE_PATTERNS):
+        for cat, rx in pats:
+            if re.search(rx, t):
+                return cat
+    return 'unknown'

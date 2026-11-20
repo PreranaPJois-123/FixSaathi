@@ -12,6 +12,8 @@ export const appliances = [
   { id: 'washing_machine', label: 'Washing machine' },
   { id: 'refrigerator', label: 'Refrigerator' },
   { id: 'ceiling_fan', label: 'Ceiling fan' },
+  { id: 'microwave_oven', label: 'Microwave' },
+  { id: 'water_purifier', label: 'Water purifier' },
   { id: 'mcb_electrical', label: 'MCB / wiring' },
   { id: 'rooftop_solar', label: 'Rooftop solar' },
 ] as const

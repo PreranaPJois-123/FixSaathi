@@ -20,7 +20,7 @@ from .knowledge import cosine
 logger = logging.getLogger('knowledge_base')
 WORD = re.compile(r'[a-z0-9]{2,}')
 STOP = {'the', 'and', 'is', 'it', 'my', 'not', 'of', 'to', 'in', 'on', 'with', 'hai', 'nahi', 'ka', 'ki', 'raha', 'rahi', 'but', 'its', 'this', 'that', 'was', 'are', 'code', 'error', 'err', 'showing', 'shows',
-        'display', 'machine', 'washing', 'washer', 'fridge', 'refrigerator', 'ac', 'split', 'appliance', 'unit', 'please', 'help', 'kya', 'karu', 'problem', 'issue'}
+        'display', 'machine', 'washing', 'washer', 'fridge', 'refrigerator', 'ac', 'split', 'appliance', 'unit', 'please', 'help', 'kya', 'karu', 'problem', 'issue', 'microwave', 'purifier', 'oven'}
 VERIFICATION_WEIGHT = {'technician_reviewed': 1.25, 'verified_source': 1.15, 'unverified': 1.0, 'synthetic_demo': 0.5}
 
 
@@ -52,7 +52,7 @@ def ingest(db: Session, records: list[RepairRecord]) -> dict:
                     search_text=r.search_text(), data=d, last_updated=r.last_updated)
         row = existing.get(r.record_id)
         if row:
-            if row.data != d:
+            if row.data != d or row.search_text != cols['search_text']:
                 for k, v in cols.items(): setattr(row, k, v)
                 updated += 1
         else:
@@ -80,7 +80,11 @@ def detect_brand(db: Session, text_: str) -> str | None:
 
 async def retrieve(db: Session, query: str, category: str | None = None, brand: str | None = None, model: str | None = None,
                    error_codes: list[str] | None = None, k: int = 6, include_synthetic: bool = False, use_embeddings: bool = True) -> dict:
-    cats = [category] + RELATED.get(category, []) if category and category != 'unknown' else []
+    detected = None
+    if not category or category == 'unknown':  # appliance-aware even when the session has no appliance yet
+        detected = N.detect_appliance(query)
+        category = detected if detected != 'unknown' else None
+    cats = [category] + RELATED.get(category, []) if category else []
     brand = brand or detect_brand(db, query)
     codes = error_codes if error_codes is not None else N.extract_codes(query)
 
@@ -109,11 +113,15 @@ async def retrieve(db: Session, query: str, category: str | None = None, brand: 
 
     code_found, code_missing = [], []
     for c in codes:
-        q = base().where(RepairRecordRow.error_code == c)
-        rows = db.scalars(q.limit(10)).all()
-        (code_found if rows else code_missing).append(c)
+        rows = db.scalars(base().where(RepairRecordRow.error_code == c).limit(10)).all()
+        # Codes a source lists as alternatives (LG 'CH38 / F4') match too, as whole tokens only, so E1 never matches E10.
+        alias_rows = db.scalars(base().where(RepairRecordRow.error_code != c, RepairRecordRow.data['error_code_original'].as_string()
+                                             .op('~*')(rf'\m{re.escape(c)}\M')).limit(10)).all() if re.fullmatch(r'[A-Z0-9]{1,8}', c) else []
+        (code_found if rows or alias_rows else code_missing).append(c)
         for row in rows:
             add(row, 10.0, 'error_code')
+        for row in alias_rows:
+            add(row, 9.0, 'error_code')
 
     code_missing = [c for c in code_missing if not any(c.endswith(f) or f.endswith(c) for f in code_found)]  # 'ERIF' alias of found 'IF'
     tsq = _tsquery(query)
@@ -155,8 +163,8 @@ async def retrieve(db: Session, query: str, category: str | None = None, brand: 
     coverage = 'none' if not ranked else 'grounded' if any(not h.related and h.match in ('error_code', 'keyword', 'embedding') for h in ranked) else 'partial'
     if codes and code_missing and not code_found:
         coverage = 'partial' if ranked else 'none'
-    log(logger, 'retrieve', category=category, brand=brand, codes=codes, hits=len(ranked), mode=mode, coverage=coverage)
-    return {'mode': mode, 'fallback_reason': reason, 'coverage': coverage, 'brand': brand, 'error_codes_found': code_found,
+    log(logger, 'retrieve', category=category, detected=detected, brand=brand, codes=codes, hits=len(ranked), mode=mode, coverage=coverage)
+    return {'mode': mode, 'fallback_reason': reason, 'coverage': coverage, 'brand': brand, 'category': category, 'category_detected': detected, 'error_codes_found': code_found,
             'error_codes_unknown': code_missing, 'hits': ranked}
 
 
