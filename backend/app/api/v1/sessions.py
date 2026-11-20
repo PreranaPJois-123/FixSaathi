@@ -7,7 +7,7 @@ from ...core.exceptions import AppError, NotFound
 from ...db.models import Conversation, Media, RepairSession, User
 from ...db.session import get_db
 from ...dependencies import current_user
-from ...integrations.storage.local import get_storage, inspect_image
+from ...integrations.storage.local import get_storage
 from ...schemas.repair import ChatResult, MediaOut, MessageIn, MessageOut, Page, SessionCreate, SessionOut, SessionPatch
 from ...services import ai
 from ...services.access import get_owned_session, get_readable_session, session_scope
@@ -72,11 +72,15 @@ async def post_message(session_id: uuid.UUID, body: MessageIn, u: User = Depends
     s = get_owned_session(db, u, session_id); ensure_open(s)
     if not body.text.strip() and not body.media_ids:
         raise AppError('Message is empty.', code='EMPTY_MESSAGE')
+    files = []
     if body.media_ids:
-        found = set(db.scalars(select(Media.id).where(Media.id.in_(body.media_ids), Media.session_id == s.id)))
-        if found != set(body.media_ids):
-            raise NotFound('One or more images do not belong to this session.')
-    um = add_message(db, s, 'user', body.text.strip(), 'image' if body.media_ids and not body.text.strip() else 'text', {'media_ids': [str(i) for i in body.media_ids]})
+        rows = {m.id: m for m in db.scalars(select(Media).where(Media.id.in_(body.media_ids), Media.session_id == s.id, Media.kind != 'generated'))}
+        if set(rows) != set(body.media_ids):
+            raise NotFound('One or more files do not belong to this session.')
+        files = [{'id': str(i), 'kind': 'document' if rows[i].kind == 'document' else 'image', 'mime': rows[i].mime_type, 'size': rows[i].size_bytes,
+                  'name': (rows[i].meta or {}).get('filename'), 'pages': (rows[i].meta or {}).get('pages')} for i in dict.fromkeys(body.media_ids)]
+    mtype = ('image' if all(f['kind'] == 'image' for f in files) else 'file') if files and not body.text.strip() else 'text'
+    um = add_message(db, s, 'user', body.text.strip(), mtype, {'media_ids': [str(i) for i in dict.fromkeys(body.media_ids)], 'attachments': files})
     if not s.issue_description and body.text.strip():
         s.issue_description = body.text.strip()[:2000]
     db.commit()  # persist the technician's message even if the AI call fails
@@ -89,18 +93,45 @@ async def post_message(session_id: uuid.UUID, body: MessageIn, u: User = Depends
                           ai_error={'code': e.code, 'message': e.message, 'hint': e.details.get('hint'), 'provider_status': e.details.get('provider_status')})
 
 
+async def _store_upload(db: Session, u: User, session_id: uuid.UUID, file: UploadFile, source: str, images_only: bool) -> MediaOut:
+    from ...config import get_settings
+    from ...integrations.storage.files import process_image, process_upload, safe_name
+    from ...integrations.storage.local import InvalidUpload
+    st = get_settings()
+    s = get_owned_session(db, u, session_id); ensure_open(s)
+    count = db.scalar(select(func.count()).select_from(Media).where(Media.session_id == s.id, Media.kind != 'generated')) or 0
+    if count >= st.max_files_per_session:
+        raise InvalidUpload(f'This session already has {count} files. Start a new session for more.', code='TOO_MANY_FILES', status=409)
+    limit = max(st.max_upload_size_mb, st.max_document_size_mb) * 1024 * 1024
+    data = await file.read(limit + 1)
+    if images_only:
+        p = process_image(data)
+    else:
+        p = process_upload(data, file.filename)
+    if p.kind == 'image' and source == 'document':
+        source = 'upload'
+    kind = 'document' if p.kind == 'document' else source
+    meta = dict(p.meta)
+    if p.kind == 'image':
+        meta.setdefault('filename', safe_name(file.filename, 'camera-photo.jpg' if source == 'capture' else 'photo'))
+    key = get_storage().put(p.data, p.ext, f'sessions/{s.id}')
+    m = Media(session_id=s.id, uploaded_by=u.id, kind=kind, storage_key=key, mime_type=p.mime, size_bytes=len(p.data), width=p.width, height=p.height, meta=meta)
+    db.add(m); db.flush()
+    return media_out(m)
+
+
 @router.post('/sessions/{session_id}/images', response_model=MediaOut, status_code=201)
 async def upload(session_id: uuid.UUID, file: UploadFile = File(...), source: str = Query('upload', pattern='^(upload|capture)$'),
                  u: User = Depends(current_user), db: Session = Depends(get_db)):
-    s = get_owned_session(db, u, session_id); ensure_open(s)
-    from ...config import get_settings
-    limit = get_settings().max_upload_size_mb * 1024 * 1024
-    data = await file.read(limit + 1)
-    mime, ext, w, h = inspect_image(data)
-    key = get_storage().put(data, ext, f'sessions/{s.id}')
-    m = Media(session_id=s.id, uploaded_by=u.id, kind=source, storage_key=key, mime_type=mime, size_bytes=len(data), width=w, height=h, meta={})
-    db.add(m); db.flush()
-    return media_out(m)
+    """Images only (kept for older clients). Photos are re-encoded without EXIF/GPS metadata."""
+    return await _store_upload(db, u, session_id, file, source, images_only=True)
+
+
+@router.post('/sessions/{session_id}/files', response_model=MediaOut, status_code=201)
+async def upload_file(session_id: uuid.UUID, file: UploadFile = File(...), source: str = Query('upload', pattern='^(upload|capture)$'),
+                      u: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Images, PDFs, Word (.docx) and text files. Validated by content; see integrations/storage/files.py."""
+    return await _store_upload(db, u, session_id, file, source, images_only=False)
 
 
 @router.get('/sessions/{session_id}/images', response_model=list[MediaOut])
@@ -113,6 +144,14 @@ def list_images(session_id: uuid.UUID, u: User = Depends(current_user), db: Sess
 def get_media(media_id: uuid.UUID, u: User = Depends(current_user), db: Session = Depends(get_db)):
     m = db.get(Media, media_id)
     if not m:
-        raise NotFound('Image not found.')
+        raise NotFound('File not found.')
     get_readable_session(db, u, m.session_id)  # authorisation through the owning session
-    return Response(get_storage().get(m.storage_key), media_type=m.mime_type, headers={'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff'})
+    headers = {'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff'}
+    if m.kind == 'document':
+        from urllib.parse import quote
+        name = (m.meta or {}).get('filename') or f'document.{m.storage_key.rsplit(".", 1)[-1]}'
+        inline = m.mime_type in ('application/pdf', 'text/plain', 'text/csv', 'text/markdown')
+        headers['Content-Disposition'] = f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}"
+        headers['Content-Security-Policy'] = "default-src 'none'; sandbox"  # nothing in a document can run scripts
+    media_type = f'{m.mime_type}; charset=utf-8' if m.mime_type.startswith('text/') else m.mime_type
+    return Response(get_storage().get(m.storage_key), media_type=media_type, headers=headers)

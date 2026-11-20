@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { BookOpenCheck, Camera, Loader2, ShieldCheck } from 'lucide-react'
+import { BookOpenCheck, Camera, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
 import { Emblem, Wordmark } from '../components/common/Logo'
 import { useAuth } from '../context/AuthContext'
 import type { ApiError } from '../services/api'
@@ -18,16 +18,21 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [f, setF] = useState({ name: '', email: '', password: '', org: '' })
   const [busy, setBusy] = useState(false)
+  const [showPw, setShowPw] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr(null)
     try {
+      setShowPw(false)  // never leave a password visible after submitting
       if (mode === 'login') await login(f.email, f.password)
       else await register(f.name, f.email, f.password, f.org)
       nav((loc.state as { from?: string } | null)?.from || '/', { replace: true })
     } catch (x) {
       const a = x as ApiError
-      setErr(a.code === 'VALIDATION_ERROR' ? 'Please check the form. Passwords need at least 8 characters.' : a.message)
+      setErr(a.code === 'VALIDATION_ERROR' ? 'Please check the form. Passwords need at least 8 characters.'
+        : a.code === 'EMAIL_TAKEN' ? 'An account with this email already exists. Sign in instead.'
+          : a.code === 'RATE_LIMITED' ? 'Too many attempts. Wait a minute and try again.'
+            : a.status === 0 || a.code === 'NETWORK_ERROR' ? 'Cannot reach the server. Check your internet connection and try again.' : a.message)
     } finally { setBusy(false) }
   }
   const label = 'mb-1.5 block text-xs font-medium text-ink-2'
@@ -65,11 +70,22 @@ export default function LoginPage() {
                 <div><label className={label} htmlFor="org">Organisation <span className="text-ink-3">(optional)</span></label><input id="org" className="field" placeholder="Service company" value={f.org} onChange={e => setF({ ...f, org: e.target.value })} /></div>
               </>}
               <div><label className={label} htmlFor="email">Email</label><input id="email" type="email" className="field" placeholder="you@company.com" autoComplete="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-              <div><label className={label} htmlFor="pw">Password</label><input id="pw" type="password" className="field" placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 8 : 1} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /></div>
+              <div>
+                <label className={label} htmlFor="pw">Password</label>
+                <div className="relative">
+                  <input id="pw" type={showPw ? 'text' : 'password'} className="field !pr-12" placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    required minLength={mode === 'register' ? 8 : 1} maxLength={128} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} aria-describedby={mode === 'register' ? 'pw-hint' : undefined} />
+                  <button type="button" onClick={() => setShowPw(v => !v)} onMouseDown={e => e.preventDefault()} aria-label={showPw ? 'Hide password' : 'Show password'} aria-pressed={showPw} aria-controls="pw" title={showPw ? 'Hide password' : 'Show password'}
+                    className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink">
+                    {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {mode === 'register' && <p id="pw-hint" className={`mt-1.5 text-xs ${f.password.length === 0 ? 'text-ink-3' : f.password.length < 8 ? 'text-warn' : 'text-ok'}`}>{f.password.length === 0 ? 'Use at least 8 characters.' : f.password.length < 8 ? `${8 - f.password.length} more character${8 - f.password.length === 1 ? '' : 's'} needed.` : 'Looks good.'}</p>}
+              </div>
               {err && <p role="alert" className="rounded-xl border border-crit/40 bg-crit/10 px-3 py-2 text-sm text-crit">{err}</p>}
               <button type="submit" disabled={busy} className="btn btn-primary w-full py-3 text-[15px]">{busy && <Loader2 size={16} className="animate-spin" />}{mode === 'login' ? 'Sign in' : 'Create account'}</button>
               <div className="flex items-center gap-3 text-[11px] text-ink-3"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-              <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(null) }} className="btn w-full">
+              <button type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(null); setShowPw(false) }} className="btn w-full">
                 {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
               </button>
             </form>

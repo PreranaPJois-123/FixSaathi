@@ -4,7 +4,7 @@
  */
 import { api, tokens } from './api'
 import type {
-  ChatResult, ComponentResult, Diagnosis, Escalation, Language, MediaItem, Overview, Page, RepairSession, RepairStep, Report, SafetyState,
+  ChatResult, ComponentResult, Diagnosis, Escalation, FileKind, Language, MediaItem, Overview, Page, RepairSession, RepairStep, Report, SafetyState,
   SavedDiagnosis, ServerMessage, SimilarResult, TechRow, Tokens, TrendPoint, User,
 } from '../types'
 
@@ -39,18 +39,51 @@ export const chatService = {
   send: (sid: string, text: string, media_ids: string[], channel: 'text' | 'voice' = 'text') => api<ChatResult>(`/api/v1/sessions/${sid}/messages`, { body: { text, media_ids, channel }, timeoutMs: 90000 }),
 }
 
+/** Every file the technician can attach. The server checks the real bytes again; this check gives a fast, clear message. */
+export const FILE_RULES = {
+  imageTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  imageExt: ['jpg', 'jpeg', 'png', 'webp'],
+  docExt: ['pdf', 'docx', 'txt', 'csv', 'md', 'log'],
+  maxImageBytes: 8 * 1024 * 1024,
+  maxDocBytes: 15 * 1024 * 1024,
+  maxPerMessage: 6,
+  acceptImages: 'image/jpeg,image/png,image/webp',
+  acceptDocs: '.pdf,.docx,.txt,.csv,.md,.log,application/pdf,text/plain,text/csv,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+const extOf = (name: string) => (name.includes('.') ? name.split('.').pop()!.toLowerCase() : '')
+export const fmtSize = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`
+
+export const fileService = {
+  /** image | document, or an error message for anything unsupported or too large. */
+  check(file: File | Blob): { kind: FileKind } | { error: string } {
+    const name = file instanceof File ? file.name : 'camera-photo.jpg'
+    const ext = extOf(name)
+    const isImage = FILE_RULES.imageTypes.includes(file.type) || (!file.type && FILE_RULES.imageExt.includes(ext))
+    const isDoc = FILE_RULES.docExt.includes(ext) || file.type === 'application/pdf'
+    if (file.size === 0) return { error: `“${name}” is empty.` }
+    if (isImage) return file.size > FILE_RULES.maxImageBytes ? { error: `“${name}” is larger than 8 MB. Please choose a smaller photo.` } : { kind: 'image' }
+    if (isDoc) return file.size > FILE_RULES.maxDocBytes ? { error: `“${name}” is larger than 15 MB. Upload only the pages you need.` } : { kind: 'document' }
+    if (file.type.startsWith('image/')) return { error: `“${name}” is not supported. Use a JPG, PNG or WebP photo.` }
+    return { error: `“${name}” is not a supported file. Use photos (JPG, PNG, WebP), PDF, Word (.docx) or text files.` }
+  },
+  upload(sid: string, file: Blob, source: 'upload' | 'capture', name?: string) {
+    const f = new FormData(); f.append('file', file, name || (file instanceof File ? file.name : source === 'capture' ? 'camera-photo.jpg' : 'upload'))
+    return api<MediaItem>(`/api/v1/sessions/${sid}/files?source=${source}`, { form: f, timeoutMs: 90000 })
+  },
+  list: (sid: string) => api<MediaItem[]>(`/api/v1/sessions/${sid}/images`),
+}
+
+/** Kept for older call sites: photo-only validation and upload. */
 export const cameraService = {
-  maxBytes: 8 * 1024 * 1024,
+  maxBytes: FILE_RULES.maxImageBytes,
   validate(file: File | Blob): string | null {
     if (!file.type.startsWith('image/')) return 'That file is not an image. Please choose a JPG, PNG or WebP photo.'
+    if (!FILE_RULES.imageTypes.includes(file.type)) return 'That image type is not supported. Please choose a JPG, PNG or WebP photo.'
     if (file.size > cameraService.maxBytes) return 'That image is larger than 8 MB. Please choose a smaller one.'
     return null
   },
-  upload(sid: string, file: Blob, source: 'upload' | 'capture') {
-    const f = new FormData(); f.append('file', file, source === 'capture' ? 'capture.jpg' : 'upload')
-    return api<MediaItem>(`/api/v1/sessions/${sid}/images?source=${source}`, { form: f, timeoutMs: 60000 })
-  },
-  list: (sid: string) => api<MediaItem[]>(`/api/v1/sessions/${sid}/images`),
+  upload: (sid: string, file: Blob, source: 'upload' | 'capture') => fileService.upload(sid, file, source),
+  list: fileService.list,
 }
 
 export const repairService = {

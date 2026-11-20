@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     storage_provider: str = 'local'
     local_storage_path: str = 'uploads'
     max_upload_size_mb: int = 8
+    max_document_size_mb: int = 15  # PDFs, Word and text files
+    max_files_per_session: int = 60
 
     alloydb_enabled: bool = False
     alloydb_database_url: str | None = None

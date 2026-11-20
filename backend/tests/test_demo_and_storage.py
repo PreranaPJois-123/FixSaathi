@@ -57,7 +57,10 @@ def test_database_storage_survives_restart_and_is_access_checked(client, tech, o
         up = client.post(f'/api/v1/sessions/{session_id}/images', files={'file': ('a.png', png(), 'image/png')}, headers=tech['h']); assert up.status_code == 201
         url = up.json()['url']
         st.reset_storage()  # simulate a restart: nothing is cached in memory or on disk
-        r = client.get(url, headers=tech['h']); assert r.status_code == 200 and r.content == png()
+        r = client.get(url, headers=tech['h']); assert r.status_code == 200
+        import io as _io
+        from PIL import Image as _Im
+        assert _Im.open(_io.BytesIO(r.content)).convert('RGB').tobytes() == _Im.open(_io.BytesIO(png())).convert('RGB').tobytes()  # same pixels, metadata stripped
         assert client.get(url, headers=other['h']).status_code == 404
         assert client.get(url).status_code == 401
         bad = client.post(f'/api/v1/sessions/{session_id}/images', files={'file': ('x.png', b'not an image', 'image/png')}, headers=tech['h'])

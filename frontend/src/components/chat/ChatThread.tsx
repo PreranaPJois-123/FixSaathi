@@ -8,6 +8,8 @@ import type { ChatMessage } from '../../types'
 import { SourceList } from '../common/SourceList'
 import { AuthImage } from '../common/AuthImage'
 import { Markdown } from './Markdown'
+import { DocChip } from '../composer/Composer'
+import { openFile } from '../../utils/openFile'
 import { speakable } from '../../utils/text'
 
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -37,9 +39,11 @@ function Bubble({ m }: { m: ChatMessage }) {
   }
   const mine = m.role === 'user'
   const photos = m.attachments && m.attachments.length > 0 && (
-    <div className={`mb-2 flex flex-wrap gap-2 ${mine ? 'justify-end' : ''}`}>{m.attachments.map(a => a.server
-      ? <AuthImage key={a.id} src={a.url} alt="Attached appliance" className="h-32 w-32 overflow-hidden rounded-2xl border border-line shadow-lg" />
-      : <img key={a.id} src={a.url} alt="Attached appliance" className="h-32 w-32 rounded-2xl border border-line object-cover shadow-lg" />)}</div>
+    <div className={`mb-2 flex flex-wrap gap-2 ${mine ? 'justify-end' : ''}`}>{m.attachments.map(a => a.kind === 'document'
+      ? <DocChip key={a.id} name={a.name || 'Document'} size={a.size} onOpen={() => void openFile(a).catch(() => undefined)} />
+      : a.server
+        ? <AuthImage key={a.id} src={a.url} alt="Attached appliance" className="h-32 w-32 overflow-hidden rounded-2xl border border-line shadow-lg" />
+        : <img key={a.id} src={a.url} alt="Attached appliance" className="h-32 w-32 rounded-2xl border border-line object-cover shadow-lg" />)}</div>
   )
   if (mine) {
     return (
@@ -70,15 +74,16 @@ function Bubble({ m }: { m: ChatMessage }) {
   )
 }
 
-function ThinkingLabel() {
+function ThinkingLabel({ progress }: { progress: string | null }) {
   const [t, setT] = useState(0)
   useEffect(() => { const id = setInterval(() => setT(x => x + 1), 1000); return () => clearInterval(id) }, [])
+  if (progress) return <span className="text-sm"><span className="text-shimmer font-medium">{progress}...</span></span>
   const phase = t < 3 ? 'Reading your message' : t < 8 ? 'Checking the repair knowledge base' : t < 20 ? 'Gemini is working on the answer' : 'Still working, Gemini is busy'
   return <span className="text-sm tabular-nums"><span className="text-shimmer font-medium">{phase}...</span> <span className="text-ink-3">{t}s</span></span>
 }
 
 export function ChatThread() {
-  const { messages, thinking, error } = useApp()
+  const { messages, thinking, progress, error } = useApp()
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [messages.length, thinking])
   return (
@@ -89,7 +94,7 @@ export function ChatThread() {
           <Avatar />
           <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface/60 px-4 py-2.5">
             <span className="flex items-center gap-1">{[0, 1, 2].map(i => <span key={i} className="typing-dot h-1.5 w-1.5 rounded-full bg-teal" style={{ animationDelay: `${i * 0.15}s` }} />)}</span>
-            <ThinkingLabel />
+            <ThinkingLabel progress={progress} />
           </div>
         </motion.div>
       )}

@@ -37,6 +37,11 @@ What each evidence level means:
 | Required tools and escalation reason in diagnosis | Done | Tested with fake Gemini. Not verified live. |
 | Conversation-aware chat (real turns, follow-ups, earlier photo kept) | Done | Tested with fake Gemini. **Not verified live** from this environment. |
 | Markdown answers with numbered sources | Done | Tested (parser unit tests, browser screenshots) |
+| Password show/hide on sign-in and registration | Done | Component tests + browser test |
+| + attach menu: several photos, PDF, Word, TXT/CSV/MD, camera, drag-and-drop, paste | Done | Component tests + browser test (real Chrome) |
+| Camera: preview, front/back, retake, confirm, permission and https errors, phone-camera fallback | Done | Component tests; browser test with a simulated camera. **Real phone cameras not tested from this environment.** |
+| PDFs and documents read by the AI | Done | Backend tests with fake Gemini (PDF sent as PDF, text as data). **Not verified live.** |
+| Photo metadata (GPS) removed on upload | Done | Backend test |
 | Fine-tuned or custom-trained model | **Not built** | FixSaathi uses Gemini through its API with retrieval. We do not claim a trained model. |
 | Embedding re-ranking | Code exists, not used in deployment | No index built; deployment uses `VECTOR_SEARCH_MODE=keyword` |
 | **Gemini Live** streaming voice and camera | Built, not usable with the current key | Tested with a fake Live session. The key lists no Live model. |

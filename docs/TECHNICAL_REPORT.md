@@ -107,18 +107,46 @@ Evidence levels:
 **Interface**
 - New design system (tokens, cards, buttons, inputs, chips) and redesigned sidebar, sign-in, home (live knowledge count and AI status), chat, workspace, history (search, mobile cards), reports, dashboard, help, demo, voice and the camera dialog.
 
+## 3d. Attachments, camera, sign-in and backend hardening (20 Nov 2026, late night)
+
+**New, working features**
+- *Password visibility:* an eye button in the password field on sign-in and registration shows or hides the password while you type. It keeps your cursor and resets to hidden when you submit or switch modes. Registration shows a live length hint.
+- *"+" attach menu* in the chat composer (home and assistant): **Photos and images** (several at once), **PDF or document** (PDF, Word .docx, TXT, CSV, Markdown; several at once), and **Take a photo**. Also drag-and-drop and pasting an image. Up to 6 files per message, each removable before sending. Clear messages for unsupported or oversized files. Upload progress shows in the chat ("Uploading 2 of 3: manual.pdf").
+- *Camera:* live preview using the back camera by default, a front/back switch when the device has both, capture, preview with **Retake** / **Use this photo**, and nothing is uploaded until the message is sent. It explains each failure: permission denied, no camera, camera busy, or a page that is not https. Fallbacks: **Use phone camera app** (the phone's own camera) and **Upload from gallery**. The camera is released whenever the dialog closes.
+- *Documents in the AI:* PDFs are sent to Gemini as real PDFs, so scanned pages are read too. Word and text files are sent as their extracted text, wrapped as data that cannot act as instructions. Document text also feeds the knowledge-base search. The workspace lists documents separately from photos; PDFs and text open in a new tab, Word files download.
+- *Failed uploads lose nothing:* the message is taken back out of the chat, and your text and files are put back in the box with the reason.
+
+**Backend bugs fixed**
+- Photos kept their **EXIF and GPS metadata** (location, camera make). They are now rotated upright and re-encoded without metadata.
+- There was no pixel limit, so very large images were only partly guarded against. Images over 40 megapixels are now refused.
+- There was no limit on files per session. It is now 60.
+- Two simultaneous registrations with the same email would return a **500**. They now return `EMAIL_TAKEN`.
+- Login timing revealed whether an email had an account. A dummy hash now evens out the timing.
+- Reusing an old refresh token did not revoke the account's other sessions. It now does, with a 30-second grace period so two tabs refreshing together still work.
+- Unexpected errors returned a **plain-text 500** the app could not read. All errors are now JSON. Database conflicts return 409, and an unreachable database returns 503.
+- The component locator would accept a PDF. It now refuses documents.
+- `pypdf` was missing from `requirements.txt`.
+
+**Frontend bugs fixed**
+- A **502/503 while the free server wakes up signed the user out**, because the refresh call cleared the saved sign-in on any error. Only a real "token invalid" now signs out. Startup retries for up to about 45 s and shows "Waking up the server".
+- Raw proxy errors showed as "Request failed (503)". They are now readable messages.
+- Tablets now get the slim sidebar by default so the chat has room.
+
+**Known limitation (by design, not changed):** registering with an existing organisation's name joins that organisation. Technicians only ever see their own sessions, so no data is exposed, but there are no invitations yet.
+
 ## 4. Test results (run 20 Nov 2026)
 
 | Suite | Result |
 |---|---|
-| Backend pytest (real PostgreSQL, fake Gemini) | **141 passed, 0 failed**. Covers chat turns and follow-ups, stemming, citation clean-up, the embedding skip, dataset quality, appliance detection, retrieval per appliance, code aliases, the microwave rule and the diagnosis fields. |
-| Frontend unit tests (Vitest) | **10 passed** (Markdown parser, speech text, upload checks, API client) |
+| Backend pytest (real PostgreSQL, fake Gemini) | **166 passed, 0 failed**. The 25 file tests use real files built in the test: photos with GPS and rotation, PDFs (text, scanned, encrypted, 61 pages, damaged), Word, CSV, Markdown, disguised binaries, path-traversal names, size, count and access limits, chat with PDF and documents, and the refresh-token and login-timing fixes. Covers chat turns and follow-ups, stemming, citation clean-up, the embedding skip, dataset quality, appliance detection, retrieval per appliance, code aliases, the microwave rule and the diagnosis fields. |
+| Frontend unit and component tests (Vitest, jsdom, Testing Library) | **29 passed**: password toggle (sign-in and registration), attach menu (open, options, Escape), several files, unsupported, oversized and too many files, paste, file rules, draft restored after a failed upload, camera (back camera, switch, release, denied, no camera, busy, not https, preview and confirm, non-image refused), opening files, API client (waking server keeps sign-in, invalid token signs out, proxy errors), Markdown, speech text |
 | TypeScript type check and production build | Pass |
 | Lint (oxlint) | 0 errors, 3 warnings (re-render performance hints) |
 | Browser end-to-end, real Chrome against the production-style single service (re-run after the knowledge update) | **29 of 29 checks pass**: login and errors, register, refresh survives reload, chat, sidebar, camera capture, component box, diagnosis, image evidence, lock, server 409 refusal, one statement keeps the lock, both unlock, step completion, step picture, report contents, safety disclaimer, history, saved diagnoses, roles, manager dashboard, voice on a closed session, mobile without horizontal scroll |
 | Browser test for a provider failure | Pass: the specific "API key invalid" error and its fix hint are shown |
 | Browser demo-mode test, **no AI key**, `STORAGE_PROVIDER=database`, server restarted mid-test | **16 of 16 pass**: health, AI-unavailable notice, demo link, labels, photo, banner, lock (409), photo after restart, unlock, demo report label, 401 without a token, no page errors |
 | Console or page errors during the full screenshot journey | 0 |
+| Browser test of the new features (real Chrome, simulated camera device) | **31 of 31 pass**: password toggle, + menu with 2 photos and 3 documents, unsupported file, camera capture, retake, use, sent, photos and documents in the workspace, PDF opens, Word downloads, document added in the workspace, names kept after reload, failed upload restores the draft, mobile (390 px) and tablet (820 px) menu fit, no sideways scroll, camera opens, permission denial |
 | Fresh setup from the source ZIP (new venv, `npm ci`, `setup_env.py`, migrations, ingest, one-process run, browser smoke test) | **8 of 8 pass** |
 
 **Not covered by automated tests:**

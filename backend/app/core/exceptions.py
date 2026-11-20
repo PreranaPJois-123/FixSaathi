@@ -1,3 +1,5 @@
+import logging
+from sqlalchemy.exc import IntegrityError, OperationalError
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -32,6 +34,23 @@ def install_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app(_: Request, e: AppError):
         return JSONResponse(error_body(e.code, e.message, e.details), status_code=e.status)
+
+    @app.exception_handler(IntegrityError)
+    async def _integrity(_: Request, e: IntegrityError):
+        # e.g. two registrations with the same email at the same moment: a clean 409, never a 500
+        logging.getLogger('app').warning('integrity_error: %s', str(e.orig).splitlines()[0] if e.orig else e)
+        return JSONResponse(error_body('CONFLICT', 'That conflicts with existing data. Refresh and try again.'), status_code=409)
+
+    @app.exception_handler(OperationalError)
+    async def _db_down(_: Request, e: OperationalError):
+        logging.getLogger('app').error('database_unavailable: %s', str(e.orig).splitlines()[0] if e.orig else e)
+        return JSONResponse(error_body('DATABASE_UNAVAILABLE', 'The database is not reachable right now. Try again in a moment.'), status_code=503)
+
+    @app.exception_handler(Exception)
+    async def _unexpected(request: Request, e: Exception):
+        # Always JSON, never a stack trace or a plain-text page the app cannot read.
+        logging.getLogger('app').exception('unhandled_error path=%s', request.url.path)
+        return JSONResponse(error_body('INTERNAL_ERROR', 'Something went wrong on the server. Please try again.'), status_code=500)
 
     @app.exception_handler(RequestValidationError)
     async def _val(_: Request, e: RequestValidationError):

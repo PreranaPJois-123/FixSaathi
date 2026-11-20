@@ -11,7 +11,9 @@ export class ApiError extends Error {
 
 let accessToken: string | null = null
 let onSignedOut: (() => void) | null = null
-let refreshing: Promise<boolean> | null = null
+let refreshing: Promise<RefreshResult> | null = null
+/** ok: new tokens; invalid: the sign-in is really over; transient: server waking up or offline, keep the sign-in. */
+type RefreshResult = 'ok' | 'invalid' | 'transient'
 
 export const tokens = {
   set(access: string, refresh: string) { accessToken = access; try { localStorage.setItem(REFRESH_KEY, refresh) } catch { /* storage unavailable */ } },
@@ -33,19 +35,24 @@ async function parse(res: Response): Promise<unknown> {
 function toError(status: number, body: unknown): ApiError {
   const e = (body as { error?: { code?: string; message?: string; details?: Record<string, unknown> } })?.error
   if (e) return new ApiError(status, e.code || 'ERROR', e.message || 'Request failed', e.details || {})
-  return new ApiError(status, status === 0 ? 'NETWORK' : 'ERROR', status === 0 ? 'Cannot reach the FixSaathi server.' : `Request failed (${status}).`)
+  if ([502, 503, 504].includes(status)) return new ApiError(status, 'SERVER_WAKING', 'The server is starting up or busy. Wait a few seconds and try again.')
+  if (status === 413) return new ApiError(status, 'UPLOAD_TOO_LARGE', 'That file is too large to upload.')
+  return new ApiError(status, status === 0 ? 'NETWORK' : 'ERROR', status === 0 ? 'Cannot reach the FixSaathi server. Check your internet connection.' : `Request failed (${status}).`)
 }
 
-export async function refreshTokens(): Promise<boolean> {
+export async function refreshTokens(): Promise<boolean> { return (await refreshDetailed()) === 'ok' }
+
+export async function refreshDetailed(): Promise<RefreshResult> {
   const rt = tokens.refresh()
-  if (!rt) return false
-  refreshing ??= (async () => {
+  if (!rt) return 'invalid'
+  refreshing ??= (async (): Promise<RefreshResult> => {
     try {
       const r = await fetch(`${BASE}/api/v1/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: rt }) })
-      if (!r.ok) { tokens.clear(); return false }
+      if (r.status === 401 || r.status === 422) { tokens.clear(); return 'invalid' }
+      if (!r.ok) return 'transient'  // e.g. 502/503 while the server wakes up: do NOT sign the user out
       const d = await r.json() as { access_token: string; refresh_token: string }
-      tokens.set(d.access_token, d.refresh_token); return true
-    } catch { return false } finally { setTimeout(() => { refreshing = null }, 0) }
+      tokens.set(d.access_token, d.refresh_token); return 'ok'
+    } catch { return 'transient' } finally { setTimeout(() => { refreshing = null }, 0) }
   })()
   return refreshing
 }
@@ -70,7 +77,9 @@ export async function api<T>(path: string, o: Opts = {}, retried = false): Promi
   }
   clearTimeout(timer)
   if (res.status === 401 && !retried && !path.startsWith('/api/v1/auth/')) {
-    if (await refreshTokens()) return api<T>(path, o, true)
+    const r = await refreshDetailed()
+    if (r === 'ok') return api<T>(path, o, true)
+    if (r === 'transient') throw new ApiError(503, 'SERVER_WAKING', 'The server is starting up. Wait a few seconds and try again.')
     tokens.clear(); onSignedOut?.()
   }
   if (o.raw && res.ok) return res as unknown as T

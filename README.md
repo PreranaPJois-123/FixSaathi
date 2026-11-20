@@ -128,6 +128,10 @@ cd backend && DATABASE_URL=postgresql+psycopg://USER:PASS@localhost:5432/fixsaat
 cd frontend && npm test && npm run build
 ```
 
+### What you can attach
+
+Use the **+** button in the chat: photos (JPG, PNG, WebP, up to 8 MB), PDFs, Word (.docx) and text files (.txt, .csv, .md, up to 15 MB), or **Take a photo** with the device camera. You can attach up to 6 files per message, or drag and drop them, or paste an image. The server checks every file's real contents, removes location metadata from photos, and refuses anything else. The camera needs https (or localhost).
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -137,6 +141,8 @@ cd frontend && npm test && npm run build
 | Chat says *AI is not available* | No `GEMINI_API_KEY` in `backend/.env`. Paste it, restart the backend. |
 | *Free-tier quota reached* | Wait about a minute; the fallback models are tried automatically. |
 | Voice button does nothing | Use Chrome or Edge and allow the microphone. Voice uses browser speech plus Gemini. |
+| Camera says permission denied | Click the camera icon in the address bar, allow the camera, then **Try camera again**. On http (not https) browsers block the camera: use **Upload from gallery**. |
+| "Waking up the server" on the live site | The free Render plan sleeps when idle; the first load takes up to a minute. You stay signed in. |
 
 ## AI behaviour, and what happens without AI
 

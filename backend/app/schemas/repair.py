@@ -38,7 +38,7 @@ class SessionOut(BaseModel):
 
 class MessageIn(BaseModel):
     text: str = Field(default='', max_length=4000)
-    media_ids: list[uuid.UUID] = Field(default_factory=list, max_length=4)
+    media_ids: list[uuid.UUID] = Field(default_factory=list, max_length=6)
     channel: Literal['text', 'voice'] = 'text'
 
 

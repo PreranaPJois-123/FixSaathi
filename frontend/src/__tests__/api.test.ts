@@ -18,7 +18,7 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
     const e = await api('/api/v1/x').catch(x => x) as ApiError
     expect(e.code).toBe('NETWORK')
-    expect(e.message).toBe('Cannot reach the FixSaathi server.')
+    expect(e.message).toMatch(/^Cannot reach the FixSaathi server\./)
   })
 
   it('sends the bearer token and refreshes once on 401', async () => {
@@ -40,5 +40,32 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError'))))))
     const e = await api('/api/v1/x', { timeoutMs: 20 }).catch(x => x) as ApiError
     expect(e.code).toBe('TIMEOUT')
+  })
+
+  it('keeps the sign-in when the server is waking up (502 on refresh)', async () => {
+    const store: Record<string, string> = {}
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v }, removeItem: (k: string) => { delete store[k] } })
+    tokens.set('old-access', 'refresh-1')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/auth/refresh') ? new Response('Bad Gateway', { status: 502 }) : json(401, { error: { code: 'TOKEN_EXPIRED', message: 'expired' } })))
+    const e = await api('/api/v1/sessions').catch(x => x) as ApiError
+    expect(e.code).toBe('SERVER_WAKING')
+    expect(store['fixsaathi.refresh']).toBe('refresh-1')
+  })
+
+  it('signs out only when the refresh token is really invalid', async () => {
+    await new Promise(r => setTimeout(r, 5))  // let the previous test's shared refresh settle
+    const store: Record<string, string> = {}
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v }, removeItem: (k: string) => { delete store[k] } })
+    tokens.set('old-access', 'refresh-1')
+    vi.stubGlobal('fetch', vi.fn(async () => json(401, { error: { code: 'REFRESH_INVALID', message: 'no' } })))
+    await api('/api/v1/sessions').catch(() => undefined)
+    expect(store['fixsaathi.refresh']).toBeUndefined()
+  })
+
+  it('turns proxy errors without a JSON body into a readable message', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>503</html>', { status: 503, headers: { 'content-type': 'text/html' } })))
+    const e = await api('/api/v1/x').catch(x => x) as ApiError
+    expect(e.code).toBe('SERVER_WAKING')
+    expect(e.message).toMatch(/starting up/)
   })
 })

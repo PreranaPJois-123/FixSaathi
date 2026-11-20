@@ -6,7 +6,9 @@ import { SafetyPanel } from '../components/repair/SafetyPanel'
 import { AuthImage } from '../components/common/AuthImage'
 import { ErrorState, Skeleton, StatusPill } from '../components/common/ui'
 import { SourceList } from '../components/common/SourceList'
-import { cameraService, repairService, sessionService } from '../services'
+import { fileService, repairService, sessionService } from '../services'
+import { DocChip } from '../components/composer/Composer'
+import { openFile } from '../utils/openFile'
 import type { ApiError } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useApp } from '../context/AppContext'
@@ -46,7 +48,7 @@ export default function RepairSessionPage() {
   const load = useCallback(async () => {
     setLoadErr(null)
     try {
-      const [ss, m, d, st, sf] = await Promise.all([sessionService.get(id), cameraService.list(id), repairService.diagnosis(id), repairService.steps(id), repairService.safety(id)])
+      const [ss, m, d, st, sf] = await Promise.all([sessionService.get(id), fileService.list(id), repairService.diagnosis(id), repairService.steps(id), repairService.safety(id)])
       setS(ss); setMedia(m); setDiag(d); setSteps(st); setSafety(sf)
       repairService.similar(id).then(setSimilar).catch(() => undefined)
     } catch (e) { setLoadErr((e as ApiError).message) }
@@ -63,8 +65,16 @@ export default function RepairSessionPage() {
   }
   const refreshSession = async () => setS(await sessionService.get(id))
 
-  const addPhoto = (a: Attachment) => run('upload', async () => { const m = await cameraService.upload(id, a.file, a.source === 'camera' ? 'capture' : 'upload'); setMedia(x => [...x, m]) })
-  const diagnose = () => run('diagnose', async () => { setDiag(await repairService.diagnose(id, media.filter(m => m.kind !== 'generated').slice(-3).map(m => m.id))); await refreshSession() })
+  const addPhoto = (a: Attachment) => run('upload', async () => { const m = await fileService.upload(id, a.file, a.source === 'camera' ? 'capture' : 'upload', a.name); setMedia(x => [...x, m]) })
+  const addDocs = (list: FileList | null) => run('upload', async () => {
+    for (const f of Array.from(list ?? [])) {
+      const c = fileService.check(f)
+      if ('error' in c) throw new Error(c.error)
+      const m = await fileService.upload(id, f, 'upload', f.name); setMedia(x => [...x, m])
+    }
+  })
+  const isPhoto = (m: MediaItem) => m.kind !== 'generated' && m.kind !== 'document' && m.mime_type.startsWith('image/')
+  const diagnose = () => run('diagnose', async () => { setDiag(await repairService.diagnose(id, media.filter(isPhoto).slice(-3).map(m => m.id))); await refreshSession() })
   const genSteps = () => run('steps', async () => { setSteps(await repairService.generateSteps(id)); await refreshSession() })
   const setSafe = (p: boolean, t: boolean) => run('safety', async () => { setSafety(await repairService.confirmSafety(id, p, t)); setSteps(await repairService.steps(id)) })
   const toggle = (x: RepairStep) => run(`step-${x.id}`, async () => {
@@ -84,7 +94,8 @@ export default function RepairSessionPage() {
 
   const done = steps.filter(x => x.status === 'completed').length
   const pct = steps.length ? Math.round(done / steps.length * 100) : 0
-  const photos = media.filter(m => m.kind !== 'generated')
+  const photos = media.filter(isPhoto)
+  const docs = media.filter(m => m.kind === 'document')
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8">
@@ -135,6 +146,17 @@ export default function RepairSessionPage() {
                 {comp && <div className="rounded-2xl border border-teal/25 bg-teal/[0.05] p-3.5 text-sm"><p className="font-medium">{comp.found ? comp.component_name : 'Not identified'}</p><p className="text-ink-2">{comp.explanation}</p>{comp.uncertainty && <p className="mt-1 text-xs text-ink-3">{comp.uncertainty}</p>}<p className="mt-1 text-xs text-ink-3">{comp.note}</p></div>}
               </div>
             )}
+            <div className="mt-5 border-t border-line pt-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="section-label">Documents{docs.length ? ` (${docs.length})` : ''}</p>
+                {owner && open && <label className="btn btn-sm cursor-pointer"><FileText size={13} />Add PDF or document
+                  <input type="file" multiple hidden data-testid="workspace-docs" accept=".pdf,.docx,.txt,.csv,.md,.log" onChange={e => { void addDocs(e.currentTarget.files); e.currentTarget.value = '' }} /></label>}
+              </div>
+              {docs.length === 0 ? <p className="text-xs text-ink-3">Attach a manual page, service sheet or notes. They are also added from chat.</p>
+                : <div className="flex flex-wrap gap-2">{docs.map(d => { const name = String(d.meta.filename ?? 'Document')
+                    return <DocChip key={d.id} name={name} size={d.size_bytes} onOpen={() => void openFile({ id: d.id, url: d.url, server: true, kind: 'document', name, mime: d.mime_type }).catch(() => setMsg({ kind: 'error', text: 'Could not open that file.' }))} /> })}</div>}
+            </div>
+            {busy === 'upload' && <p className="mt-3 flex items-center gap-2 text-xs text-ink-2"><Loader2 size={12} className="animate-spin text-teal" />Uploading...</p>}
           </section>
 
           <section aria-labelledby="diag-h" className="card card-pad">

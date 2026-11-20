@@ -14,22 +14,30 @@ export interface User {
 
 export interface Tokens { access_token: string; refresh_token: string; expires_in: number; user: User }
 
+export type FileKind = 'image' | 'document'
+
 export interface Attachment {
   id: string
   name: string
-  /** Local preview URL (object URL or data URL). Never sent to the server. */
+  /** Local preview URL (object URL). Never sent to the server. */
   url: string
   source: 'camera' | 'upload'
-  /** The image bytes to upload. */
+  /** image (shown as a thumbnail) or document (PDF, Word, text: shown as a file chip). */
+  kind: FileKind
+  size: number
+  /** The bytes to upload. */
   file: Blob
 }
+
+/** What a chat message shows for each attached file. */
+export interface MessageFile { id: string; url: string; server?: boolean; kind?: FileKind; name?: string; size?: number; mime?: string; pages?: number }
 
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   text: string
   at: number
-  attachments?: { id: string; url: string; server?: boolean }[]
+  attachments?: MessageFile[]
   aiGenerated?: boolean
   demo?: boolean
   sources?: SourceRef[]
@@ -63,7 +71,7 @@ export interface Page<T> { items: T[]; total: number; limit: number; offset: num
 export interface ServerMessage { id: string; role: 'user' | 'assistant' | 'system'; message: string; message_type: string; meta: Record<string, unknown>; created_at: string }
 export interface ChatResult { user_message: ServerMessage; assistant_message: ServerMessage | null; ai_status: 'ok' | 'unavailable' | 'error'; ai_error: { code: string; message: string; hint?: string | null } | null }
 
-export interface MediaItem { id: string; kind: 'capture' | 'upload' | 'generated'; mime_type: string; size_bytes: number; width: number | null; height: number | null; url: string; meta: Record<string, unknown>; created_at: string }
+export interface MediaItem { id: string; kind: 'capture' | 'upload' | 'generated' | 'document'; mime_type: string; size_bytes: number; width: number | null; height: number | null; url: string; meta: Record<string, unknown>; created_at: string }
 
 export interface Evidence { source: 'observed_in_image' | 'technician_statement' | 'ai_inference' | 'unknown'; detail: string }
 export interface Fault { fault: string; explanation: string; confidence: number; evidence: Evidence[]; status?: 'supported_by_records' | 'possible_cause' | 'unverified_hypothesis'; record_ids?: string[] }

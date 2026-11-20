@@ -66,9 +66,9 @@ class Media(IdMixin, CreatedMixin, Base):
     __tablename__ = 'media'
     session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('repair_sessions.id', ondelete='CASCADE'), index=True)
     uploaded_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'))
-    kind: Mapped[str] = mapped_column(String(20), default='capture')  # capture | upload | generated
+    kind: Mapped[str] = mapped_column(String(20), default='capture')  # capture | upload | generated | document
     storage_key: Mapped[str] = mapped_column(String(255), unique=True)
-    mime_type: Mapped[str] = mapped_column(String(40))
+    mime_type: Mapped[str] = mapped_column(String(120))
     size_bytes: Mapped[int] = mapped_column(Integer)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)

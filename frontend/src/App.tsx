@@ -35,9 +35,14 @@ const PageFallback = () => <div className="flex h-full items-center justify-cent
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard'))
 
 function Protected({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, waking } = useAuth()
   const loc = useLocation()
-  if (loading) return <div className="flex h-dvh items-center justify-center text-ink-2"><Loader2 className="animate-spin" /></div>
+  if (loading) return (
+    <div className="flex h-dvh flex-col items-center justify-center gap-3 px-6 text-center text-ink-2" role="status" aria-live="polite">
+      <Loader2 className="animate-spin text-teal" />
+      {waking && <><p className="font-medium text-ink">Waking up the server...</p><p className="max-w-xs text-sm">The free server sleeps when idle and takes up to a minute to start. You stay signed in.</p></>}
+    </div>
+  )
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
   return <>{children}</>
 }
