@@ -1,0 +1,12 @@
+# Pings the live prototype every 10 minutes so Render's free plan does not sleep during evaluation.
+name: keep-awake
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --max-time 90 --retry 2 https://fixsaathi.onrender.com/health
